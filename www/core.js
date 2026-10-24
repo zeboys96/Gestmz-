@@ -3,7 +3,8 @@
 var CFG = Object.assign({ SUPABASE_URL: '', SUPABASE_KEY: '', STAFF_DOMAIN: 'gestmz.app' }, window.GESTMZ_CONFIG || {});
 const PAGAMENTOS = ['Numerário', 'M-Pesa', 'e-Mola', 'mKesh', 'Cartão/POS', 'Transferência', 'Fiado'];
 const PAPEL = { super: 'Dono do sistema', dono: 'Dono da loja', gerente: 'Gerente', caixa: 'Caixa' };
-const TIPOS_LOJA = ['Farmácia', 'Mercearia / Loja', 'Supermercado', 'Clínica / Posto de saúde', 'Papelaria', 'Cosméticos e beleza', 'Outro'];
+const TIPOS_LOJA = ['Mercearia', 'Supermercado', 'Minimercado / Cantina', 'Farmácia', 'Clínica / Posto de saúde', 'Padaria e pastelaria', 'Restaurante / Bar', 'Papelaria', 'Cosméticos e beleza', 'Roupa e calçado', 'Electrónicos e telemóveis', 'Material de construção', 'Outro'];
+const eSaude = t => ['Farmácia', 'Clínica / Posto de saúde'].includes(t);
 const UNIDADES = ['un', 'pacote', 'caixa', 'kg', 'g', 'litro', 'ml', 'par', 'dúzia', 'saco'];
 
 const ICONS = {
@@ -93,7 +94,7 @@ const erro = e => toast(e && e.message ? e.message : String(e), true);
 /* ---------- janelas ---------- */
 function modal(title, body, o = {}) {
   const m = document.createElement('div'); m.className = 'modal';
-  m.innerHTML = `<div class="box ${o.wide ? 'wide' : ''}" role="dialog" aria-modal="true"><div class="mh"><b>${title}</b><button type="button" class="x" data-x aria-label="Fechar">✕</button></div><form class="mb" autocomplete="off">${body}<div class="mf">${o.onOk ? '<button type="button" class="btn ghost" data-x>Cancelar</button>' : '<button type="button" class="btn ghost" data-x>Fechar</button>'}${o.onOk ? `<button class="btn ${o.danger ? 'red' : ''}" data-ok>${o.okText || 'Guardar'}</button>` : ''}</div></form></div>`;
+  m.innerHTML = `<div class="box ${o.wide ? 'wide' : ''}" role="dialog" aria-modal="true"><div class="mh"><b>${title}</b><button type="button" class="x" data-x aria-label="Fechar">✕</button></div><form class="mb" autocomplete="off">${body}<div class="mf"><button type="button" class="btn ghost" data-x>${o.cancelText || (o.onOk ? 'Cancelar' : 'Fechar')}</button>${o.onOk ? `<button class="btn ${o.danger ? 'red' : ''}" data-ok>${o.okText || 'Guardar'}</button>` : ''}</div></form></div>`;
   document.body.appendChild(m);
   let fechado = false;
   const close = () => { if (fechado) return; fechado = true; m.remove(); if (o.onClose) o.onClose(); };
@@ -109,7 +110,7 @@ function modal(title, body, o = {}) {
       if (r !== false) { o.keepOnClose ? (fechado = true, m.remove()) : close(); } else { b.disabled = false; b.textContent = old; }
     } catch (err) { erro(err); b.disabled = false; b.textContent = old; }
   };
-  const first = $('input:not([type=hidden]):not([type=checkbox]),select', f); if (first && !o.noFocus) setTimeout(() => { try { first.focus(); } catch (e) { /* ok */ } }, 30);
+  const first = $('input:not([type=hidden]):not([type=checkbox]),select', f); if (first && !o.noFocus && !matchMedia('(pointer:coarse)').matches) setTimeout(() => { try { first.focus(); } catch (e) { /* ok */ } }, 30);
   return { m, f, close };
 }
 function ask(msg, fn, txt, danger) { return modal('Confirmar', `<p>${esc(msg)}</p>`, { okText: txt || 'Confirmar', danger, onOk: async () => { await fn(); } }); }
@@ -162,9 +163,8 @@ async function lerCamera(onCode) {
 
 /* ---------- entrada ---------- */
 function authShell(inner) {
-  $('#app').innerHTML = `<div class="auth"><aside class="auth-art"><div class="art-in">${logo(46)}<h1>GestMZ</h1><p>Gestão empresarial para farmácias e lojas em Moçambique.</p><ul><li>Vendas, stock e validades num só lugar</li><li>Cada loja vê apenas os seus dados</li><li>Funciona no telemóvel e no computador</li></ul></div></aside><main class="auth-main"><div class="auth-card">${inner}</div></main></div>`;
+  $('#app').innerHTML = `<div class="auth"><aside class="auth-art"><div class="art-in">${logo(46)}<h1>GestMZ</h1><p>Gestão empresarial de comércios em Moçambique.</p><ul><li>Vendas, stock e validades num só lugar</li><li>Cada loja vê apenas os seus dados</li><li>Funciona no telemóvel e no computador</li></ul></div></aside><main class="auth-main"><div class="auth-card">${inner}</div></main></div>`;
 }
-const staffEmail = (u, codigo) => String(u).includes('@') ? String(u).trim() : `${String(u).trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '')}.${String(codigo).trim()}@${CFG.STAFF_DOMAIN}`;
 
 function vFalta() {
   authShell(`<h2>Falta ligar o banco de dados</h2><p>Abra o ficheiro <b>config.js</b> e cole a chave pública do Supabase no campo <b>SUPABASE_KEY</b>. Depois volte a abrir esta página.</p><p class="muted small">O passo a passo está no ficheiro LEIA-ME.md.</p>`);
@@ -175,56 +175,61 @@ function vErro(msg) {
 }
 async function vLogin(msg) {
   let temSuper = true; try { const { data } = await sb.rpc('existe_super'); temSuper = !!data; } catch (e) { /* offline */ }
-  let tab = lsGet('gestmz_tab') || 'func';
   authShell(`<h2>Entrar</h2>${msg ? `<div class="msg">${esc(msg)}</div>` : ''}
-    <div class="tabs" id="tabs"><button type="button" data-t="func">Funcionário</button><button type="button" data-t="dono">Dono / e-mail</button></div>
-    <form id="f"><div id="campos"></div><button class="btn block" id="go">Entrar</button></form>
-    <div class="sep">ainda não tem conta?</div>
-    <button class="btn ghost block" id="reg">Registar a minha loja — experimente grátis</button>
+    <form id="f">${fld('E-mail', 'e', lsGet('gestmz_email') || '', 'email', 'required autocapitalize="none" autocomplete="username" inputmode="email"')}${fld('Senha', 'p', '', 'password', 'required autocomplete="current-password"')}
+    <button class="btn block" id="go">Entrar</button></form>
+    <p class="muted small" style="text-align:center;margin:16px 0 0">O acesso é dado pelo administrador do GestMZ (lojas) ou pelo dono da loja (funcionários).</p>
     ${!temSuper ? '<div style="margin-top:10px;text-align:center"><button class="link" id="sup">Configurar o dono do sistema</button></div>' : ''}`);
-  const desenha = () => {
-    $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
-    $('#campos').innerHTML = tab === 'func'
-      ? fld('Código da loja', 'codigo', lsGet('gestmz_codigo') || '', 'text', 'inputmode="numeric" required autocomplete="off"', 'O dono da loja dá-lhe este código.') + fld('Utilizador', 'u', '', 'text', 'required autocapitalize="none" autocomplete="username"') + fld('Senha', 'p', '', 'password', 'required autocomplete="current-password"')
-      : fld('E-mail', 'e', '', 'email', 'required autocapitalize="none" autocomplete="username"') + fld('Senha', 'p', '', 'password', 'required autocomplete="current-password"');
-  };
-  desenha();
-  $('#tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; lsSet('gestmz_tab', tab); desenha(); };
   $('#f').onsubmit = async e => {
     e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)), b = $('#go'); b.disabled = true; b.textContent = 'A entrar…';
     try {
-      const email = tab === 'func' ? staffEmail(d.u, d.codigo) : d.e.trim();
-      if (tab === 'func') lsSet('gestmz_codigo', d.codigo.trim());
-      const { error } = await sb.auth.signInWithPassword({ email, password: d.p });
+      lsSet('gestmz_email', d.e.trim());
+      const { error } = await sb.auth.signInWithPassword({ email: d.e.trim(), password: d.p });
       if (error) throw new Error(traduz(error.message));
       await entrar();
     } catch (err) { erro(err); b.disabled = false; b.textContent = 'Entrar'; }
   };
-  $('#reg').onclick = () => vRegistarLoja(false);
   const s = $('#sup'); if (s) s.onclick = vSetupSuper;
 }
-function vRegistarLoja(existente) {
-  authShell(`<h2>Registar a minha loja</h2><p class="muted">Crie a conta do dono. Depois adiciona gerentes e caixas.</p>
-    <form id="f">${fld('Nome do estabelecimento', 'nome', '', 'text', 'required')}
-    <label>Tipo<select class="in" name="tipo">${opts(TIPOS_LOJA)}</select></label>
-    <div class="row">${fld('NUIT', 'nuit', '', 'text', 'inputmode="numeric"')}${fld('Telefone', 'tel', '', 'tel', 'placeholder="84 000 0000"')}</div>
-    ${fld('Endereço', 'endereco', '', 'text', 'placeholder="Cidade, bairro, rua"')}
-    <hr style="border:0;border-top:1px solid var(--line);margin:6px 0 14px">
-    ${fld('O seu nome', 'dono', '', 'text', 'required')}
-    ${existente ? '' : fld('E-mail', 'email', '', 'email', 'required autocapitalize="none"') + fld('Senha (mínimo 6 caracteres)', 'senha', '', 'password', 'required minlength="6"')}
-    <button class="btn block" id="go">Criar a minha loja</button></form><div style="text-align:center;margin-top:8px"><button class="link" id="v">Já tenho conta</button></div>`);
-  $('#v').onclick = () => existente ? sair() : vLogin();
+function vSemAcesso() {
+  authShell(`<h2>Sem acesso</h2><div class="msg">Esta conta ainda não foi activada no GestMZ. Peça ao administrador (ou ao dono da loja) para lhe dar acesso.</div><button class="btn block" id="s">Sair</button>`);
+  $('#s').onclick = sair;
+}
+/* Funcionários (gerente/caixa): depois do e-mail e senha, confirmam-se com o código de acesso dado pelo responsável. */
+function vPin(perfil, loja) {
+  authShell(`<div style="text-align:center">${avatar(perfil, 'lg')}<h2 style="margin:10px 0 2px">${esc(perfil.nome)}</h2>
+    <div class="muted">${PAPEL[perfil.papel]} · ${esc(loja.nome)}</div></div>
+    <form id="f" style="margin-top:18px"><label>Código de acesso<input class="in pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required placeholder="••••••" style="text-align:center;font-size:22px;letter-spacing:6px"><span class="hint">Foi-lhe dado pelo dono ou gerente da loja.</span></label>
+    <button class="btn block" id="go">Aceder</button></form>
+    <div style="text-align:center;margin-top:8px"><button class="link" id="v">Não sou eu · sair</button></div>`);
+  $('#v').onclick = sair;
+  setTimeout(() => { try { $('[name=pin]').focus(); } catch (e) { /* ok */ } }, 50);
   $('#f').onsubmit = async e => {
-    e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)), b = $('#go'); b.disabled = true; b.textContent = 'A criar…';
+    e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)), b = $('#go'); b.disabled = true; b.textContent = 'A verificar…';
     try {
-      if (!existente) {
-        const { data, error } = await sb.auth.signUp({ email: d.email.trim(), password: d.senha });
-        if (error) throw new Error(traduz(error.message));
-        if (!data.session) throw new Error('A conta foi criada mas precisa de confirmação por e-mail. No Supabase, desligue "Confirm email" (veja o LEIA-ME).');
-      }
-      await q(sb.rpc('registar_loja', { p_nome: d.nome, p_tipo: d.tipo, p_nuit: d.nuit, p_tel: d.tel, p_endereco: d.endereco, p_dono_nome: d.dono }));
+      const ok = await q(sb.rpc('verificar_pin', { p_pin: d.pin.trim() }));
+      if (!ok) throw new Error('Código de acesso incorrecto.');
+      try { sessionStorage.setItem('gestmz_pin_ok', perfil.id); } catch (x) { /* ok */ }
       await entrar();
-    } catch (err) { erro(err); b.disabled = false; b.textContent = 'Criar a minha loja'; }
+    } catch (err) { erro(err); b.disabled = false; b.textContent = 'Aceder'; e.target.reset(); }
+  };
+}
+/* Primeiro acesso do lojista: dados da loja. */
+function vConfigurarLoja(perfil, loja) {
+  authShell(`<h2>Bem-vindo ao GestMZ</h2><p class="muted">Preencha os dados da sua loja para começar. Pode alterá-los depois em <b>Conta</b>.</p>
+    <form id="f">${fld('O seu nome completo', 'dono', perfil.nome === 'Lojista' ? '' : perfil.nome, 'text', 'required autocomplete="name"')}
+    ${fld('Nome da loja', 'nome', /por configurar/i.test(loja.nome) ? '' : loja.nome, 'text', 'required')}
+    <label>Tipo de loja<select class="in" name="tipo">${opts(TIPOS_LOJA, loja.tipo)}</select></label>
+    ${fld('Localização (cidade, bairro, rua)', 'endereco', '', 'text', 'required placeholder="Ex.: Maputo, Matola, Av. Samora Machel"')}
+    <div class="row">${fld('Telefone da loja', 'tel', '', 'tel', 'placeholder="84 000 0000"')}${fld('NUIT (opcional)', 'nuit', '', 'text', 'inputmode="numeric"')}</div>
+    <button class="btn block" id="go">Guardar e entrar</button></form><div style="text-align:center;margin-top:8px"><button class="link" id="v">Sair</button></div>`);
+  $('#v').onclick = sair;
+  $('#f').onsubmit = async e => {
+    e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)), b = $('#go'); b.disabled = true; b.textContent = 'A guardar…';
+    try {
+      await q(sb.rpc('configurar_loja', { p_dono_nome: d.dono, p_nome: d.nome, p_tipo: d.tipo, p_endereco: d.endereco, p_tel: d.tel, p_nuit: d.nuit }));
+      await entrar();
+    } catch (err) { erro(err); b.disabled = false; b.textContent = 'Guardar e entrar'; }
   };
 }
 function vSetupSuper() {
@@ -245,6 +250,7 @@ function vSetupSuper() {
 }
 async function sair() {
   pararRT(); cart = [];
+  try { sessionStorage.removeItem('gestmz_pin_ok'); } catch (e) { /* ok */ }
   try { await sb.auth.signOut(); } catch (e) { /* ok */ }
   S = { perfil: null, loja: null, plat: null, cats: [], produtos: [], clientes: [], equipa: [] };
   vLogin();
@@ -264,11 +270,18 @@ async function entrar() {
     const { data } = await sb.auth.getSession(); if (!data.session) return vLogin();
     const r = await q(sb.from('perfis').select('*').eq('id', data.session.user.id));
     const perfil = r[0];
-    if (!perfil) return vRegistarLoja(true);
+    if (!perfil) return vSemAcesso();
     if (!perfil.ativo) { await sb.auth.signOut(); return vLogin('Esta conta foi desativada. Fale com o dono da loja.'); }
     S.perfil = perfil;
-    if (perfil.papel === 'super') { await carregarSuper(); shell(navSuper()); iniciarSuperRT(); go('s_lojas'); }
-    else { await carregarLoja(); shell(navLoja()); iniciarRT(); go(perfil.papel === 'caixa' ? 'pdv' : 'painel'); primeiraAjuda(); }
+    if (perfil.papel === 'super') { await carregarSuper(); shell(navSuper()); iniciarSuperRT(); return go('s_lojas'); }
+    const lj = (await q(sb.from('lojas').select('*').eq('id', perfil.loja_id)))[0];
+    if (!lj) return vSemAcesso();
+    if (perfil.papel === 'dono' && lj.configurada === false) return vConfigurarLoja(perfil, lj);
+    if (perfil.papel !== 'dono') {
+      let ok = false; try { ok = sessionStorage.getItem('gestmz_pin_ok') === perfil.id; } catch (e) { /* ok */ }
+      if (!ok && await q(sb.rpc('pin_exigido'))) return vPin(perfil, lj);
+    }
+    await carregarLoja(); shell(navLoja()); iniciarRT(); go(perfil.papel === 'caixa' ? 'pdv' : 'painel'); primeiraAjuda();
   } catch (e) { vErro(e.message); }
 }
 
@@ -277,10 +290,10 @@ const NAV_LOJA = [
   ['painel', 'painel', 'Painel', 'dono,gerente'], ['pdv', 'vender', 'Vender', 'dono,gerente,caixa'], ['vendas', 'vendas', 'Vendas', 'dono,gerente,caixa'],
   ['produtos', 'produtos', 'Produtos', 'dono,gerente,caixa'], ['clientes', 'clientes', 'Clientes', 'dono,gerente,caixa'], ['despesas', 'despesas', 'Despesas', 'dono,gerente'],
   ['relatorios', 'relatorios', 'Relatórios', 'dono,gerente'], ['equipa', 'equipa', 'Equipa', 'dono,gerente'], ['assinatura', 'assinatura', 'Assinatura', 'dono'],
-  ['registo', 'registo', 'Registo', 'dono,gerente'], ['ajuda', 'ajuda', 'Ajuda', 'dono,gerente,caixa'], ['perfil', 'conta', 'Conta', 'dono,gerente,caixa'], ['sair', 'sair', 'Sair', 'dono,gerente,caixa']
+  ['registo', 'registo', 'Registo', 'dono,gerente'], ['suporte', 'ajuda', 'Suporte', 'dono'], ['ajuda', 'ajuda', 'Ajuda', 'dono,gerente,caixa'], ['perfil', 'conta', 'Conta', 'dono,gerente,caixa'], ['sair', 'sair', 'Sair', 'dono,gerente,caixa']
 ];
 const navLoja = () => NAV_LOJA.filter(n => n[3].split(',').includes(S.perfil.papel));
-const navSuper = () => [['s_lojas', 'lojas', 'Lojas'], ['s_pagamentos', 'assinatura', 'Pagamentos'], ['s_config', 'conta', 'Preços e conta'], ['perfil', 'registo', 'Senha'], ['sair', 'sair', 'Sair']];
+const navSuper = () => [['s_lojas', 'lojas', 'Lojas'], ['s_pagamentos', 'assinatura', 'Pagamentos'], ['s_suporte', 'ajuda', 'Suporte'], ['s_config', 'conta', 'Preços e conta'], ['perfil', 'registo', 'Senha'], ['sair', 'sair', 'Sair']];
 function shell(items) {
   const sub = S.loja ? S.loja.nome : 'Dono do sistema';
   $('#app').innerHTML = `<div class="shell"><aside class="side"><div class="brandrow">${logo(34)}<div><b>GestMZ</b><small>${esc(sub)}</small></div></div><nav id="nav" aria-label="Menu principal"></nav><div class="me">${avatar(S.perfil)}<div><b>${esc(S.perfil.nome)}</b><span>${PAPEL[S.perfil.papel]}</span></div></div></aside><div style="flex:1;min-width:0"><div id="banner"></div><main id="main"></main></div></div>`;
@@ -358,18 +371,27 @@ function iniciarRT() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lotes', filter: f }, stock)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos', filter: f }, stock)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vendas', filter: f }, vend)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'suporte_tickets', filter: f }, () => contarSuporte(true))
       .subscribe();
     canais.push(ch);
   } catch (e) { /* sem tempo real: a app continua a funcionar */ }
   const batida = () => { sb.from('perfis').update({ ultimo_acesso: new Date().toISOString() }).eq('id', S.perfil.id).then(() => { }, () => { }); };
   batida(); hb = setInterval(batida, 60000);
+  if (S.perfil.papel === 'dono') { contarSuporte(false); poll = setInterval(() => contarSuporte(true), 120000); }
+}
+async function contarSuporte(avisar) {
+  try {
+    const l = await q(sb.from('suporte_tickets').select('id,nao_lido_loja').eq('nao_lido_loja', true));
+    const n = l.length; if (avisar && n > (window._tkn || 0)) { bip(); toast('O GestMZ respondeu ao seu pedido de suporte.'); }
+    window._tkn = n; badge('suporte', n); if (avisar && cur === 'suporte') go('suporte', true);
+  } catch (e) { /* ok */ }
 }
 
 /* ---------- autorização do gerente ---------- */
-async function verificarGerente(u, p) {
+async function verificarGerente(email, p) {
   const aux = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'gestmz-aux' } });
-  const { data, error } = await aux.auth.signInWithPassword({ email: staffEmail(u, S.loja.codigo), password: p });
-  if (error) throw new Error('Utilizador ou senha do gerente incorrectos.');
+  const { data, error } = await aux.auth.signInWithPassword({ email: String(email).trim(), password: p });
+  if (error) throw new Error('E-mail ou senha do gerente incorrectos.');
   const r = await q(aux.from('perfis').select('id,nome,papel,loja_id,ativo').eq('id', data.user.id));
   const pf = r[0];
   if (!pf || !pf.ativo || pf.loja_id !== S.loja.id || !['gerente', 'dono'].includes(pf.papel)) { await aux.auth.signOut(); throw new Error('Esse utilizador não é gerente nem dono desta loja.'); }
@@ -380,7 +402,7 @@ function autorizar(texto, acao, detalhe) {
   if (['gerente', 'dono'].includes(S.perfil.papel)) return Promise.resolve({ nome: S.perfil.nome, aux: sb, fim: () => { } });
   return new Promise(res => {
     let dado = null;
-    modal('Autorização do gerente', `<p class="muted">${esc(texto)}</p><p class="small muted">Só o gerente ou o dono podem autorizar. A acção fica registada.</p>${fld('Utilizador do gerente', 'u', '', 'text', 'required autocapitalize="none"')}${fld('Senha do gerente', 'p', '', 'password', 'required')}`,
+    modal('Autorização do gerente', `<p class="muted">${esc(texto)}</p><p class="small muted">Só o gerente ou o dono podem autorizar. A acção fica registada.</p>${fld('E-mail do gerente', 'u', '', 'email', 'required autocapitalize="none"')}${fld('Senha do gerente', 'p', '', 'password', 'required')}`,
       { okText: 'Autorizar', sticky: true, keepOnClose: true,
         onOk: async d => {
           const g = await verificarGerente(d.u, d.p);
@@ -394,4 +416,10 @@ function autorizar(texto, acao, detalhe) {
 /* ---------- ajuda: primeiro uso ---------- */
 function primeiraAjuda() { const k = 'gestmz_ajuda_' + S.perfil.id; if (!lsGet(k)) { lsSet(k, '1'); if (VIEWS.ajudaSlides) VIEWS.ajudaSlides(); } }
 
+/* campos: ao tocar, selecciona o conteúdo (números pré-preenchidos como 0 ou 10 apagam-se ao escrever) e garante que ficam visíveis acima do teclado */
+document.addEventListener('focusin', e => {
+  const t = e.target; if (!t || !t.matches) return;
+  if (t.matches('input.in:not([type=file]):not([type=checkbox]):not([type=date]):not([type=password]),textarea.in')) { try { if (/^(decimal|numeric)$/.test(t.getAttribute('inputmode') || '') || t.type === 'number') t.select(); } catch (x) { /* ok */ } }
+  if (t.matches('input,select,textarea')) setTimeout(() => { try { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) { /* ok */ } }, 320);
+});
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 0)); else setTimeout(boot, 0);

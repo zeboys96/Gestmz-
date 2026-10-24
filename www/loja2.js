@@ -75,51 +75,64 @@ VIEWS.relatorios = async function () {
 /* ======================= EQUIPA ======================= */
 const quando = v => { if (!v) return 'nunca entrou'; const m = Math.round((Date.now() - new Date(v).getTime()) / 60000); if (m < 3) return 'a trabalhar agora'; if (m < 60) return `visto há ${m} min`; if (m < 1440) return `visto há ${Math.round(m / 60)} h`; return 'visto ' + fd(v); };
 VIEWS.equipa = async function () {
-  S.equipa = await all(() => sb.from('perfis').select('id,nome,usuario,papel,foto,ativo,ultimo_acesso').eq('loja_id', S.loja.id).order('nome'));
+  S.equipa = await all(() => sb.from('perfis').select('id,nome,email,papel,foto,ativo,ultimo_acesso').eq('loja_id', S.loja.id).order('nome'));
   const dono = S.perfil.papel === 'dono';
+  const gere = u => u.id !== S.perfil.id && (dono ? u.papel !== 'dono' : u.papel === 'caixa');
   $('#main').innerHTML = `<div class="bar"><h2>Equipa</h2><button class="btn" id="novo" ${assin().ok ? '' : 'disabled'}>+ Novo funcionário</button></div>
-  <div class="card"><b>Como os funcionários entram:</b> no ecrã inicial, separador <b>Funcionário</b>, com o código da loja <b style="font-size:20px;font-family:var(--f-display)">${esc(S.loja.codigo)}</b>, o seu utilizador e a sua senha.</div>
-  <div class="team">${S.equipa.map(u => `<div class="member" ${u.ativo ? '' : 'style="opacity:.55"'}>${avatar(u, 'lg')}<div class="info"><b>${esc(u.nome)}</b><span class="muted small">${PAPEL[u.papel]}${u.usuario ? ' · ' + esc(u.usuario) : ''}</span><br><span class="small"><span class="dot ${online(u) ? 'on' : ''}"></span> ${u.ativo ? quando(u.ultimo_acesso) : 'acesso retirado'}</span>${dono && u.id !== S.perfil.id ? `<br><button class="link small" data-id="${u.id}">Editar</button>` : ''}</div></div>`).join('')}</div>`;
+  <div class="card"><b>Como dar acesso a um funcionário:</b> toque em <b>Novo funcionário</b>, escreva o nome, o e-mail e uma senha, escolha o cargo (${dono ? 'gerente ou caixa' : 'caixa'}) e defina um <b>código de acesso</b> de 6 a 10 números. Dê-lhe o e-mail, a senha e o código. Ao entrar, o funcionário vê o seu nome e a sua foto e digita o código para abrir o sistema.</div>
+  <div class="team">${S.equipa.map(u => `<div class="member" ${u.ativo ? '' : 'style="opacity:.55"'}>${avatar(u, 'lg')}<div class="info"><b>${esc(u.nome)}</b><span class="muted small">${PAPEL[u.papel]}${u.email ? ' · ' + esc(u.email) : ''}</span><br><span class="small"><span class="dot ${online(u) ? 'on' : ''}"></span> ${u.ativo ? quando(u.ultimo_acesso) : 'acesso retirado'}</span>${gere(u) ? `<br><button class="link small" data-id="${u.id}">Editar ou remover</button>` : ''}</div></div>`).join('')}</div>`;
   $('#novo').onclick = () => formEquipa();
   $('#main').onclick = e => { const b = e.target.closest('button.link'); if (b) formEquipa(S.equipa.find(u => u.id === b.dataset.id)); };
 };
 function fotoCampo(atual) {
-  return `<label>Foto (opcional)<input class="in" type="file" name="fotoarq" accept="image/*" capture="user" id="fotoarq"><img class="preview" id="fotoprev" ${atual ? `src="${esc(atual)}"` : 'hidden'} alt="Pré-visualização" style="max-height:96px;border-radius:50%"></label>`;
+  return `<div class="foto-campo"><span class="lbl">Foto (opcional)</span><img class="preview" id="fotoprev" ${atual ? `src="${esc(atual)}"` : 'hidden'} alt="Pré-visualização" style="max-height:96px;border-radius:50%">
+  <div class="row" style="margin-top:6px"><label class="btn ghost sm filebtn">Escolher ficheiro<input type="file" id="fotoarq" accept="image/*" hidden></label><label class="btn ghost sm filebtn">Tirar foto<input type="file" id="fotocam" accept="image/*" capture="user" hidden></label></div></div>`;
 }
 function ligarFoto(m) {
-  const i = $('#fotoarq', m), p = $('#fotoprev', m); const st = { v: null };
-  i.onchange = async () => { if (!i.files[0]) return; try { st.v = await imgToData(i.files[0], 160, .8, true); p.src = st.v; p.hidden = false; } catch (e) { erro(e); } };
+  const p = $('#fotoprev', m); const st = { v: null };
+  const lido = async i => { if (!i.files[0]) return; try { st.v = await imgToData(i.files[0], 160, .8, true); p.src = st.v; p.hidden = false; } catch (e) { erro(e); } };
+  ['#fotoarq', '#fotocam'].forEach(id => { const i = $(id, m); if (i) i.onchange = () => lido(i); });
   return st;
 }
+const gerarCodigo = () => String(Math.floor(Math.random() * 9e7) + 1e7);
 function formEquipa(u) {
-  const novo = !u, dono = S.perfil.papel === 'dono'; u = u || { nome: '', usuario: '', papel: 'caixa', ativo: true, foto: null };
-  const papeis = dono ? [['caixa', 'Caixa (vende e consulta)'], ['gerente', 'Gerente (gere stock, anula vendas, vê relatórios)']] : [['caixa', 'Caixa (vende e consulta)']];
+  const novo = !u, dono = S.perfil.papel === 'dono'; u = u || { nome: '', email: '', papel: 'caixa', ativo: true, foto: null };
+  const papeis = dono ? [['caixa', 'Caixa (vende e consulta)'], ['gerente', 'Gerente (gere stock, anula vendas, vê relatórios e os caixas)']] : [['caixa', 'Caixa (vende e consulta)']];
   const w = modal(novo ? 'Novo funcionário' : 'Editar ' + esc(u.nome), `${fotoCampo(u.foto)}${fld('Nome completo', 'nome', u.nome, 'text', 'required')}
-    ${novo ? fld('Utilizador (para entrar)', 'usuario', '', 'text', 'required pattern="[A-Za-z0-9_.\\-]{3,20}" autocapitalize="none"', 'Só letras e números, sem espaços. Ex.: paulo.antonio') + fld('Senha (mínimo 6 caracteres)', 'senha', '', 'password', 'required minlength="6"') : ''}
-    <label>Função<select class="in" name="papel">${opts(papeis, u.papel)}</select></label>
-    ${!novo ? `<label class="chk"><input type="checkbox" name="ativo" ${u.ativo ? 'checked' : ''}> Tem acesso ao sistema</label>` : ''}`, {
+    ${novo ? fld('E-mail do funcionário', 'email', '', 'email', 'required autocapitalize="none" autocomplete="off"', 'É com este e-mail que ele entra.') + fld('Senha (mínimo 6 caracteres)', 'senha', '', 'text', 'required minlength="6" autocomplete="off"') : `<p class="muted small">E-mail: <b>${esc(u.email || '—')}</b></p>`}
+    <label>Cargo<select class="in" name="papel">${opts(papeis, u.papel)}</select></label>
+    <label>Código de acesso${novo ? '' : ' (deixe em branco para manter)'}<div class="row" style="gap:8px;flex-wrap:nowrap"><input class="in" name="pin" id="pin" inputmode="numeric" pattern="[0-9]{6,10}" maxlength="10" autocomplete="off" ${novo ? 'required' : ''} placeholder="6 a 10 números"><button type="button" class="btn ghost sm" id="gp" style="flex:none">Gerar</button></div><span class="hint">Dê este código ao funcionário. Ele digita-o depois de entrar com o e-mail e a senha.</span></label>
+    ${!novo ? `<label class="chk"><input type="checkbox" name="ativo" ${u.ativo ? 'checked' : ''}> Tem acesso ao sistema</label><button type="button" class="btn red sm" id="rm">Remover funcionário</button>` : ''}`, {
     okText: novo ? 'Criar funcionário' : 'Guardar',
     onOk: async d => {
-      const foto = st.v || undefined;
+      const foto = st.v || undefined, pin = (d.pin || '').trim();
+      if (pin && !/^[0-9]{6,10}$/.test(pin)) throw new Error('O código de acesso deve ter de 6 a 10 números.');
       if (novo) {
-        const usuario = d.usuario.trim().toLowerCase();
+        const email = d.email.trim().toLowerCase();
         const aux = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'gestmz-aux' } });
-        const { data, error } = await aux.auth.signUp({ email: staffEmail(usuario, S.loja.codigo), password: d.senha });
+        const { data, error } = await aux.auth.signUp({ email, password: d.senha });
         if (error) throw new Error(traduz(error.message));
-        if (!data.user || (data.user.identities && data.user.identities.length === 0)) throw new Error('Este utilizador já existe. Escolha outro nome de utilizador.');
+        if (!data.user || (data.user.identities && data.user.identities.length === 0)) throw new Error('Este e-mail já tem conta no sistema. Use outro e-mail.');
         try {
-          await q(sb.rpc('criar_perfil', { p_user: data.user.id, p_nome: d.nome, p_usuario: usuario, p_papel: d.papel }));
+          await q(sb.rpc('criar_perfil', { p_user: data.user.id, p_nome: d.nome, p_email: email, p_papel: d.papel, p_pin: pin }));
           if (foto) await q(sb.from('perfis').update({ foto }).eq('id', data.user.id));
         } finally { aux.auth.signOut().catch(() => { }); }
-        if (!data.session) toast('Criado, mas o Supabase pede confirmação por e-mail. Desligue "Confirm email" (veja o LEIA-ME).', true); else toast('Funcionário criado. Pode entrar com o código da loja.');
+        if (!data.session) toast('Criado, mas o Supabase pede confirmação por e-mail. Desligue "Confirm email" (veja o LEIA-ME).', true); else toast('Funcionário criado. Dê-lhe o e-mail, a senha e o código de acesso.');
       } else {
         const o = { nome: d.nome.trim(), papel: d.papel, ativo: !!d.ativo }; if (foto) o.foto = foto;
-        await q(sb.from('perfis').update(o).eq('id', u.id)); toast('Guardado.');
+        await q(sb.from('perfis').update(o).eq('id', u.id));
+        if (pin) await q(sb.rpc('definir_pin', { p_user: u.id, p_pin: pin }));
+        toast('Guardado.');
       }
       go('equipa', true);
     }
   });
   const st = ligarFoto(w.m);
+  $('#gp', w.m).onclick = () => { $('#pin', w.m).value = gerarCodigo(); };
+  const rm = $('#rm', w.m);
+  if (rm) rm.onclick = () => ask(`Remover «${u.nome}»? Perde o acesso de imediato e o e-mail fica livre. As vendas que fez continuam no histórico.`, async () => {
+    await q(sb.rpc('remover_funcionario', { p_id: u.id })); w.close(); toast('Funcionário removido.'); go('equipa', true);
+  }, 'Remover', true);
 }
 
 /* ======================= ASSINATURA ======================= */
@@ -136,12 +149,12 @@ VIEWS.assinatura = async function () {
   <div class="card"><h3>1. Escolha o plano</h3><div class="plans" id="plans">${['mensal', 'trimestral', 'anual'].map(k => `<button type="button" class="plan" data-k="${k}">${eco(k) ? `<span class="eco">${eco(k)}</span>` : ''}<span class="muted small">${k === 'mensal' ? 'Mensal' : k === 'trimestral' ? 'Trimestral' : 'Anual'}</span><b>${mt(preco[k])}</b><span class="small muted">${meses[k]} ${meses[k] === 1 ? 'mês' : 'meses'}</span></button>`).join('')}</div>
   <h3>2. Faça a transferência</h3><div class="pay"><span class="sel"><img src="emola.png" alt="" onerror="this.remove()"><span class="mk">${esc(p.metodo)}</span>${OPERADORA[p.metodo] ? esc(OPERADORA[p.metodo]) : ''}</span><div><div class="num" id="numero">${esc(p.numero)}</div><span class="muted">em nome de <b>${esc(p.titular)}</b></span></div><button class="btn ghost sm" type="button" id="cp">Copiar número</button></div>
   <p class="small muted">Confirme que o nome do destinatário é <b>${esc(p.titular)}</b> antes de enviar o dinheiro. O valor é <b id="valor">${mt(preco[plano])}</b>.</p>
-  <h3>3. Envie o comprovativo</h3><form id="f">${fld('Referência da transação (opcional)', 'ref', '', 'text', 'placeholder="Ex.: ID da mensagem de confirmação"')}<label>Foto ou captura do comprovativo<input class="in" type="file" id="comp" accept="image/*" required></label><img class="preview" id="prev" hidden alt="Pré-visualização do comprovativo"><br><button class="btn" id="env" ${pendente ? '' : ''}>Enviar comprovativo</button></form></div>
+  <h3>3. Envie o comprovativo</h3><form id="f">${fld('Referência da transação (opcional)', 'ref', '', 'text', 'placeholder="Ex.: ID da mensagem de confirmação"')}<div class="foto-campo"><span class="lbl">Foto ou captura do comprovativo</span><div class="row" style="margin-top:6px"><label class="btn ghost filebtn">Escolher ficheiro / galeria<input type="file" id="comp" accept="image/*" hidden></label><label class="btn ghost filebtn">Tirar foto<input type="file" id="compcam" accept="image/*" capture="environment" hidden></label></div></div><img class="preview" id="prev" hidden alt="Pré-visualização do comprovativo"><br><button class="btn" id="env" ${pendente ? '' : ''}>Enviar comprovativo</button></form></div>
   <div class="card"><h3>Histórico de pagamentos</h3>${pg.length ? `<div class="tw"><table><tr><th>Data</th><th>Plano</th><th class="n">Valor</th><th>Estado</th></tr>${pg.map(x => `<tr><td>${fd(x.criado_em)}</td><td>${esc(x.plano)}</td><td class="n">${mt(x.valor)}</td><td><span class="tag ${x.estado}">${TXT_ESTADO[x.estado]}</span>${x.nota ? `<br><span class="small muted">${esc(x.nota)}</span>` : ''}</td></tr>`).join('')}</table></div>` : '<div class="empty">Ainda sem pagamentos.</div>'}</div>`;
   const marca = () => { $$('#plans .plan').forEach(b => b.classList.toggle('on', b.dataset.k === plano)); $('#valor').textContent = mt(preco[plano]); };
   $('#plans').onclick = e => { const b = e.target.closest('.plan'); if (b) { plano = b.dataset.k; marca(); } };
   $('#cp').onclick = async () => { try { await navigator.clipboard.writeText(p.numero.replace(/\s/g, '')); toast('Número copiado.'); } catch (e) { const r = document.createRange(); r.selectNodeContents($('#numero')); getSelection().removeAllRanges(); getSelection().addRange(r); toast('Seleccionado. Copie o número.'); } };
-  $('#comp').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { img = await imgToData(f, 1100, .72, false); $('#prev').src = img; $('#prev').hidden = false; } catch (er) { erro(er); } };
+  ['#comp', '#compcam'].forEach(id => $(id).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { img = await imgToData(f, 1100, .72, false); $('#prev').src = img; $('#prev').hidden = false; } catch (er) { erro(er); } });
   $('#f').onsubmit = async e => {
     e.preventDefault(); if (!img) return toast('Escolha a imagem do comprovativo.', true);
     const b = $('#env'); b.disabled = true; b.textContent = 'A enviar…';
@@ -173,7 +186,7 @@ VIEWS.registo = async function () {
 VIEWS.perfil = async function () {
   const p = S.perfil, dono = p.papel === 'dono';
   $('#main').innerHTML = `<div class="bar"><h2>A minha conta</h2></div>
-  <form class="card" id="fp"><h3>Perfil</h3><div class="row" style="align-items:center"><div style="flex:none">${avatar(p, 'xl')}</div><div>${fotoCampo(null).replace(' hidden', ' hidden')}</div></div>${fld('Nome', 'nome', p.nome, 'text', 'required')}<p class="muted small">Função: ${PAPEL[p.papel]}${S.loja ? ' · Código da loja: ' + esc(S.loja.codigo) : ''}</p><button class="btn">Guardar perfil</button></form>
+  <form class="card" id="fp"><h3>Perfil</h3><div class="row" style="align-items:center"><div style="flex:none">${avatar(p, 'xl')}</div><div>${fotoCampo(null).replace(' hidden', ' hidden')}</div></div>${fld('Nome', 'nome', p.nome, 'text', 'required')}<p class="muted small">Função: ${PAPEL[p.papel]}${S.loja ? ' · ' + esc(S.loja.nome) : ''}</p><button class="btn">Guardar perfil</button></form>
   <form class="card" id="fs"><h3>Mudar senha</h3>${fld('Nova senha (mínimo 6 caracteres)', 'senha', '', 'password', 'required minlength="6" autocomplete="new-password"')}<button class="btn">Mudar senha</button></form>
   ${dono ? `<form class="card" id="fl"><h3>Dados do estabelecimento</h3>${fld('Nome', 'nome', S.loja.nome, 'text', 'required')}<label>Tipo<select class="in" name="tipo">${opts(TIPOS_LOJA, S.loja.tipo)}</select></label><div class="row">${fld('NUIT', 'nuit', S.loja.nuit || '')}${fld('Telefone', 'tel', S.loja.tel || '', 'tel')}</div>${fld('Endereço', 'endereco', S.loja.endereco || '')}<p class="muted small">Estes dados aparecem no recibo.</p><button class="btn">Guardar dados</button></form>` : ''}`;
   const st = ligarFoto($('#fp'));
@@ -182,15 +195,27 @@ VIEWS.perfil = async function () {
   const fl = $('#fl'); if (fl) fl.onsubmit = async e => { e.preventDefault(); const d = Object.fromEntries(new FormData(fl)); try { await q(sb.rpc('atualizar_loja', { p_nome: d.nome, p_tipo: d.tipo, p_nuit: d.nuit, p_tel: d.tel, p_endereco: d.endereco })); await recarregarLoja(); shell(navLoja()); go('perfil', true); toast('Dados guardados.'); } catch (er) { erro(er); } };
 };
 
+/* ======================= SUPORTE (dono da loja) ======================= */
+VIEWS.suporte = async function () {
+  const l = await all(() => sb.from('suporte_tickets').select('*').order('atualizado_em', { ascending: false }));
+  $('#main').innerHTML = `<div class="bar"><h2>Suporte</h2><button class="btn" id="novo">+ Novo pedido</button></div>
+  <div class="card"><p style="margin-top:0">Tem uma dúvida, uma sugestão ou um problema? Escreva aqui e o GestMZ responde. As suas sugestões ajudam a melhorar o sistema.</p>
+  ${l.length ? `<div class="tw"><table><tr><th>Assunto</th><th>Tipo</th><th>Estado</th><th>Última mensagem</th><th></th></tr>${l.map(t => `<tr class="${t.estado === 'fechado' ? 'off' : ''}"><td>${t.nao_lido_loja ? '<span class="dot on"></span> ' : ''}<b>${esc(t.assunto)}</b></td><td>${TIPO_TK[t.tipo]}</td><td>${t.estado === 'aberto' ? 'À espera de resposta' : t.estado === 'fechado' ? 'Fechado' : 'Respondido'}</td><td>${fdt(t.atualizado_em)}</td><td class="act"><button class="btn ghost sm" data-id="${t.id}">Abrir</button></td></tr>`).join('')}</table></div>` : '<div class="empty">Ainda não enviou nenhum pedido.</div>'}</div>`;
+  badge('suporte', l.filter(t => t.nao_lido_loja).length);
+  $('#novo').onclick = () => modal('Novo pedido ao suporte', `<label>Tipo<select class="in" name="tipo">${opts([['duvida', 'Dúvida'], ['sugestao', 'Sugestão'], ['problema', 'Problema']])}</select></label>${fld('Assunto', 'assunto', '', 'text', 'required maxlength="120"')}<label>Mensagem<textarea class="in" name="texto" rows="5" required></textarea></label>`, {
+    okText: 'Enviar', onOk: async d => { await q(sb.rpc('abrir_ticket', { p_tipo: d.tipo, p_assunto: d.assunto, p_texto: d.texto })); toast('Pedido enviado. Vamos responder em breve.'); go('suporte', true); } });
+  $('#main').onclick = e => { const b = e.target.closest('button[data-id]'); if (b) abrirTicket(l.find(t => t.id === b.dataset.id), false); };
+};
+
 /* ======================= AJUDA ======================= */
 const SLIDES = [
   ['painel', 'Bem-vindo ao GestMZ', 'Vendas, stock, validades, equipa e assinatura num só lugar. Funciona no telemóvel e no computador, e todos os aparelhos da loja veem os mesmos dados.'],
   ['vender', 'Vender é rápido', 'Passe o leitor de código de barras e o produto entra na venda. Escolha como o cliente paga (dinheiro, M-Pesa, e-Mola, mKesh…), finalize e imprima o recibo. No telemóvel, use o botão da câmara para ler o código.'],
-  ['produtos', 'Produtos e categorias', 'Ao registar um produto, escolha a categoria numa lista (bolachas, bebidas, medicamentos, cosméticos, papelaria…). Falta uma? Crie uma nova na hora, sem sair do ecrã.'],
-  ['barcode', 'Caixa fechada ou unidade', 'Uma caixa de bolachas com 50 pacotes: regista o pacote com o código dele e a caixa com o código dela, e diz que a caixa traz 50. Ler a caixa na entrada de stock soma 50 unidades. Ler o pacote no caixa vende 1. Se só existir o código da caixa, vende a caixa inteira.'],
+  ['produtos', 'Produtos e categorias', 'Ao registar um produto, escolha a categoria numa lista (bebidas, cereais, higiene, cosméticos, papelaria, medicamentos…). Falta uma? Crie uma nova na hora, sem sair do ecrã.'],
+  ['barcode', 'Embalagem e unidade', 'Registe o produto uma só vez. Exemplo: o sabonete vem em caixas de 20. Indique o código da caixa, o código da unidade, o custo e o preço da caixa e o preço de cada unidade. Ler a caixa vende a caixa inteira (e baixa 20 do stock); ler a unidade vende 1. O stock conta-se sempre em unidades, por isso nunca há stock duplicado.'],
   ['registo', 'Stock e validades', 'Cada entrada tem lote e validade. O sistema vende primeiro o que expira primeiro e nunca vende lotes expirados. O painel avisa o que está a acabar e o que está para expirar.'],
-  ['equipa', 'Equipa com perfil e foto', 'O dono cria gerentes e caixas, cada um com o seu utilizador, senha e foto. O painel mostra quem está a trabalhar e quem vendeu mais hoje. Cada caixa vê só as suas vendas.'],
-  ['sair', 'O caixa não apaga nada sozinho', 'Para retirar um produto da venda ou anular uma venda, o caixa precisa que o gerente escreva o seu utilizador e senha. Tudo fica registado em “Registo”, com data e nome.'],
+  ['equipa', 'Equipa com perfil e foto', 'O dono cria gerentes e caixas com e-mail, senha, foto e um código de acesso. Ao entrar, o funcionário vê o seu nome e foto e digita o código. Cada cargo vê só o que lhe cabe: o caixa só as suas vendas, o gerente também a equipa de caixas, e o dono vê tudo da loja.'],
+  ['sair', 'O caixa não apaga nada sozinho', 'Para retirar um produto da venda ou anular uma venda, o caixa precisa que o gerente escreva o seu e-mail e senha. Tudo fica registado em “Registo”, com data e nome.'],
   ['clientes', 'Fiado e clientes', 'Registe o cliente e venda a fiado. A dívida fica guardada e, quando ele pagar, use “Receber”. O dono vê o total em dívida no painel.'],
   ['assinatura', 'Assinatura', 'Pague por e-Mola, M-Pesa ou mKesh para o número indicado, envie a foto do comprovativo em “Assinatura” e espere a confirmação. Quando confirmada, a validade actualiza sozinha.'],
   ['check', 'Pronto para começar', 'Comece por registar alguns produtos. Se precisar de rever este guia, abra “Ajuda” no menu. Boas vendas!']
