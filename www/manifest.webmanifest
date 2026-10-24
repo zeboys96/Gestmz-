@@ -1,0 +1,16 @@
+{
+  "name": "GestMZ — Gestão Empresarial",
+  "short_name": "GestMZ",
+  "description": "Vendas, stock, validades e equipa para farmácias e lojas em Moçambique.",
+  "lang": "pt-MZ",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#00453A",
+  "theme_color": "#00453A",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

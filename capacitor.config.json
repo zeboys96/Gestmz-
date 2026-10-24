@@ -1,0 +1,6 @@
+{
+  "appId": "mz.gestmz.app",
+  "appName": "GestMZ",
+  "webDir": "www",
+  "server": { "androidScheme": "https" }
+}
