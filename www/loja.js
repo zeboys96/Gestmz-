@@ -71,7 +71,7 @@ VIEWS.pdv = async function () {
   const q = $('#q');
   window.pdvLista = () => {
     const l = filtrarProdutos(q.value.trim()).slice(0, 40);
-    $('#lista').innerHTML = l.length ? l.map(p => { const v = vendavel(p); return `<div class="pi" ${v <= 0 ? 'style="opacity:.55"' : ''}><button class="main" type="button" data-id="${p.id}" data-c="0"><b>${esc(p.nome)}</b><small>${esc(p.categoria || '')} · stock ${v}${p.un_por_caixa ? ` (${Math.floor(v / p.un_por_caixa)} ${esc((p.embalagem || 'caixa').toLowerCase())}s)` : ''}${p.controlado ? ' · exige receita' : ''}</small></button><span class="px">${mt(p.preco)}</span>${p.un_por_caixa && p.preco_caixa ? `<button class="btn ghost sm" type="button" data-id="${p.id}" data-c="1" title="Vender a embalagem fechada">${esc(p.embalagem || 'Caixa')} ${p.un_por_caixa} un · ${mt(p.preco_caixa)}</button>` : ''}</div>`; }).join('') : `<div class="empty">Nenhum produto encontrado.${gestor ? '<br>Registe-o em “Produtos”.' : '<br>Peça ao gerente para o registar.'}</div>`;
+    $('#lista').innerHTML = l.length ? l.map(p => { const v = vendavel(p); return `<div class="pi" ${v <= 0 ? 'style="opacity:.55"' : ''}><button class="main" type="button" data-id="${p.id}" data-c="0"><b>${esc(p.nome)}</b><small>${esc(p.categoria || '')} · stock ${v}${p.un_por_caixa ? ` (${caixasVend(p)} ${esc((p.embalagem || 'caixa').toLowerCase())}(s) fechada(s) + ${v - caixasVend(p) * p.un_por_caixa} solta(s))` : ''}${p.controlado ? ' · exige receita' : ''}</small></button><span class="px">${mt(p.preco)}</span>${p.un_por_caixa && p.preco_caixa ? `<button class="btn ghost sm" type="button" data-id="${p.id}" data-c="1" title="Vender a embalagem fechada">${esc(p.embalagem || 'Caixa')} ${p.un_por_caixa} un · ${mt(p.preco_caixa)}</button>` : ''}</div>`; }).join('') : `<div class="empty">Nenhum produto encontrado.${gestor ? '<br>Registe-o em “Produtos”.' : '<br>Peça ao gerente para o registar.'}</div>`;
   };
   $('#lista').onclick = e => { const b = e.target.closest('button[data-id]'); if (b) { pdvAdd(b.dataset.id, b.dataset.c === '1'); if (innerWidth > 900) q.focus(); } };
   q.oninput = pdvLista;
@@ -105,8 +105,9 @@ function pdvAdd(pid, caixa) {
   const p = prodById(pid); if (!p) return;
   if (!assin().ok) return toast('A subscrição expirou. Renove para vender.', true);
   if (caixa && (!p.un_por_caixa || !p.preco_caixa)) return toast('Este produto não tem venda por embalagem.', true);
-  const usado = cart.filter(c => c.pid === pid).reduce((s, c) => s + unidadesDe(c, p), 0), novo = caixa ? p.un_por_caixa : 1;
-  if (usado + novo > vendavel(p)) { bip(); return toast(`Sem stock suficiente de «${p.nome}» (lotes expirados não são vendidos).`, true); }
+  const cxCart = cart.filter(c => c.pid === pid && c.caixa).reduce((s, c) => s + c.qtd, 0), unCart = cart.filter(c => c.pid === pid && !c.caixa).reduce((s, c) => s + c.qtd, 0);
+  if (caixa && cxCart + 1 > caixasVend(p)) { bip(); return toast(`Não há mais ${(p.embalagem || 'caixa').toLowerCase()}s fechadas de «${p.nome}». Venda unidades soltas ou dê entrada de embalagens.`, true); }
+  if (!caixa && unCart + 1 + cxCart * (p.un_por_caixa || 0) > vendavel(p)) { bip(); return toast(`Sem stock suficiente de «${p.nome}» (lotes expirados não são vendidos).`, true); }
   const add = () => { const it = cart.find(c => c.pid === pid && c.caixa === caixa); if (it) it.qtd++; else cart.push({ pid, caixa, qtd: 1 }); pdvDraw(); };
   if (p.controlado && !cart.some(c => c.pid === pid)) return ask(`«${p.nome}» é medicamento controlado e exige receita médica. Confirma que a receita foi apresentada?`, add, 'Receita apresentada');
   add();
@@ -144,21 +145,6 @@ async function pdvFinalizar() {
     const cl = await all(() => sb.from('clientes').select('*').order('nome')); S.clientes = cl;
     await recarregarProdutos(); await VIEWS.pdv(); bip(); mostrarRecibo(v);
   } catch (e) { erro(e); b.disabled = false; await recarregarProdutos().catch(() => { }); if (window.pdvLista) pdvLista(); }
-}
-function reciboHTML(v) {
-  const c = S.loja, cli = S.clientes.find(x => x.id === v.cliente_id);
-  return `<div class="rc"><div class="c"><b>${esc(c.nome)}</b><br>${esc(c.endereco || '')}${c.nuit ? '<br>NUIT: ' + esc(c.nuit) : ''}${c.tel ? '<br>Tel: ' + esc(c.tel) : ''}</div><hr>
-  <div>Recibo: ${nvenda(v)}${v.anulada ? ' (ANULADO)' : ''}<br>${fdt(v.data)}<br>Operador: ${esc(v.usuario_nome)}${cli ? '<br>Cliente: ' + esc(cli.nome) : ''}</div><hr>
-  ${v.itens.map(i => `<div class="l"><span>${i.qtd} x ${esc(i.nome)}${i.caixa ? ' (' + esc((i.apresentacao || 'caixa').toLowerCase()) + (i.un_por_caixa ? ' de ' + i.un_por_caixa : '') + ')' : ''}</span><span>${mt(i.total)}</span></div>`).join('')}<hr>
-  <div class="l"><span>Subtotal</span><span>${mt(v.subtotal)}</span></div>${+v.desconto ? `<div class="l"><span>Desconto</span><span>-${mt(v.desconto)}</span></div>` : ''}
-  <div class="l b"><span>TOTAL</span><span>${mt(v.total)}</span></div>${+v.iva ? `<div class="l"><span>IVA incluído</span><span>${mt(v.iva)}</span></div>` : ''}
-  <div class="l"><span>Pagamento</span><span>${esc(v.pagamento)}</span></div>${v.pagamento === 'Numerário' && +v.recebido ? `<div class="l"><span>Recebido</span><span>${mt(v.recebido)}</span></div><div class="l"><span>Troco</span><span>${mt(v.troco)}</span></div>` : ''}
-  <hr><div class="c">Obrigado pela preferência!<br>Guarde este recibo.</div></div>`;
-}
-function mostrarRecibo(v) {
-  const w = modal('Venda ' + nvenda(v), reciboHTML(v) + `<div class="mf" style="justify-content:center"><button type="button" class="btn" id="pr">Imprimir recibo</button>${!v.anulada && !v.pendente ? '<button type="button" class="btn ghost" id="an">Anular venda</button>' : ''}</div>`, {});
-  $('#pr', w.m).onclick = () => imprimir(reciboHTML(v));
-  const an = $('#an', w.m); if (an) an.onclick = () => anularVenda(v, w);
 }
 function anularVenda(v, w) {
   modal('Anular ' + nvenda(v), `<p>Total ${mt(v.total)}. O stock volta ao lote de origem${v.pagamento === 'Fiado' ? ' e a dívida do cliente é reduzida' : ''}.</p>${fld('Motivo da anulação', 'motivo', '', 'text', 'required placeholder="Ex.: cliente sem dinheiro"')}`, {
@@ -199,7 +185,7 @@ VIEWS.produtos = async function () {
     const t = pf.q.toLowerCase();
     const l = S.produtos.filter(p => (!t || p.nome.toLowerCase().includes(t) || (p.codigo || '').includes(t) || (p.codigo_caixa || '').includes(t) || (p.categoria || '').toLowerCase().includes(t)) && (!pf.c || p.categoria === pf.c) &&
       (pf.f === 'todos' || (pf.f === 'baixo' && estoque(p) > 0 && estoque(p) <= p.minimo) || (pf.f === 'sem' && estoque(p) <= 0) || (pf.f === 'expira' && p.lotes.some(x => x.validade && diasPara(x.validade) <= 90))));
-    $('#tb').innerHTML = l.length ? `<div class="tw"><table><tr><th>Produto</th><th>Categoria</th><th class="n">Stock</th><th class="n">Preço</th><th>Validade</th><th>Estado</th><th></th></tr>${l.map(p => { const s = estado(p), e = estoque(p); return `<tr><td><b>${esc(p.nome)}</b>${p.controlado ? ' <span class="tag baixo">receita</span>' : ''}<br><span class="muted small">${esc(p.codigo || 'sem código')}${p.un_por_caixa ? ' · caixa ' + esc(p.codigo_caixa || '—') + ' (' + p.un_por_caixa + ' un)' : ''}</span></td><td>${esc(p.categoria || '—')}</td><td class="n">${e}${p.un_por_caixa ? `<br><span class="muted small">${Math.floor(e / p.un_por_caixa)} ${esc((p.embalagem || 'caixa').toLowerCase())}s</span>` : ''}</td><td class="n">${mt(p.preco)}${p.preco_caixa ? `<br><span class="muted small">caixa ${mt(p.preco_caixa)}</span>` : ''}</td><td>${fd(proxVal(p))}</td><td><span class="tag ${s}">${ESTADO_TXT[s]}</span></td><td class="act">${adm ? `<button class="btn ghost sm" data-a="in" data-id="${p.id}">+ Stock</button><button class="btn ghost sm" data-a="out" data-id="${p.id}">Baixa</button><button class="btn ghost sm" data-a="et" data-id="${p.id}">Etiquetas</button><button class="btn ghost sm" data-a="ed" data-id="${p.id}">Editar</button><button class="btn ghost sm" data-a="del" data-id="${p.id}" aria-label="Apagar">Apagar</button>` : ''}</td></tr>`; }).join('')}</table></div>` : `<div class="empty">Nenhum produto. ${adm ? 'Toque em “+ Novo produto” para começar.' : ''}</div>`;
+    $('#tb').innerHTML = l.length ? `<div class="tw"><table><tr><th>Produto</th><th>Categoria</th><th class="n">Stock</th><th class="n">Preço</th><th>Validade</th><th>Estado</th><th></th></tr>${l.map(p => { const s = estado(p), e = estoque(p); return `<tr><td><b>${esc(p.nome)}</b>${p.controlado ? ' <span class="tag baixo">receita</span>' : ''}<br><span class="muted small">${esc(p.codigo || 'sem código')}${p.un_por_caixa ? ' · caixa ' + esc(p.codigo_caixa || '—') + ' (' + p.un_por_caixa + ' un)' : ''}</span></td><td>${esc(p.categoria || '—')}</td><td class="n">${e}${p.un_por_caixa ? `<br><span class="muted small">${caixasP(p)} ${esc((p.embalagem || 'caixa').toLowerCase())}(s) fechada(s)<br>${soltasP(p)} solta(s)</span>` : ''}</td><td class="n">${mt(p.preco)}${p.preco_caixa ? `<br><span class="muted small">caixa ${mt(p.preco_caixa)}</span>` : ''}</td><td>${fd(proxVal(p))}</td><td><span class="tag ${s}">${ESTADO_TXT[s]}</span></td><td class="act">${adm ? `<button class="btn ghost sm" data-a="in" data-id="${p.id}">+ Stock</button><button class="btn ghost sm" data-a="out" data-id="${p.id}">Baixa</button><button class="btn ghost sm" data-a="et" data-id="${p.id}">Etiquetas</button><button class="btn ghost sm" data-a="ed" data-id="${p.id}">Editar</button><button class="btn ghost sm" data-a="del" data-id="${p.id}" aria-label="Apagar">Apagar</button>` : ''}</td></tr>`; }).join('')}</table></div>` : `<div class="empty">Nenhum produto. ${adm ? 'Toque em “+ Novo produto” para começar.' : ''}</div>`;
   };
   $('#q').oninput = e => { pf.q = e.target.value; draw(); }; $('#c').onchange = e => { pf.c = e.target.value; draw(); }; $('#f').onchange = e => { pf.f = e.target.value; draw(); };
   if (adm) {
@@ -326,7 +312,7 @@ function formProduto(p) {
         if (novo) {
           const r = await q(sb.from('produtos').insert({ ...o, loja_id: S.loja.id }).select());
           const total = qe * (emb ? un : 0) + qu;
-          if (total > 0) await q(sb.rpc('entrada_stock', { p_produto: r[0].id, p_qtd: total, p_lote: T('lote') || null, p_validade: T('validade') || null, p_custo: cu, p_nota: 'Stock inicial' }));
+          if (total > 0) await q(sb.rpc('entrada_stock', { p_produto: r[0].id, p_qtd: total, p_lote: T('lote') || null, p_validade: T('validade') || null, p_custo: cu, p_nota: 'Stock inicial', p_soltas: emb ? qu : total }));
         } else await q(sb.from('produtos').update(o).eq('id', p.id));
       } catch (e) { const m = String(e.message || ''); if (/código de barras já está/i.test(m)) { fe(g(T('codigo') && /«/.test(m) ? 'codigo' : 'codigo_caixa'), m); toast(m, true); return false; } throw e; }
       await recarregarProdutos(); go('produtos', true); toast('Produto guardado.');
@@ -398,7 +384,7 @@ function formEntrada(p, caixas) {
     okText: 'Dar entrada',
     onOk: async d => {
       const n = parseInt(d.qtd) * (d.em === 'cx' ? p.un_por_caixa : 1); if (!(n > 0)) throw new Error('Quantidade inválida.');
-      await q(sb.rpc('entrada_stock', { p_produto: p.id, p_qtd: n, p_lote: d.lote || null, p_validade: d.validade || null, p_custo: num(d.custo), p_nota: d.nota || 'Entrada' }));
+      await q(sb.rpc('entrada_stock', { p_produto: p.id, p_qtd: n, p_lote: d.lote || null, p_validade: d.validade || null, p_custo: num(d.custo), p_nota: d.nota || 'Entrada', p_soltas: d.em === 'cx' ? 0 : n }));
       await recarregarProdutos(); toast(`Entraram ${n} unidades de ${p.nome}.`); if (cur === 'produtos') go('produtos', true);
     }
   });

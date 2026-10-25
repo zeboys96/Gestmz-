@@ -89,6 +89,7 @@ async function entrarOffline() {
   };
 }
 
+const p_ordem = itens => itens.slice().sort((a, b) => (b.caixa ? 1 : 0) - (a.caixa ? 1 : 0));   // embalagens primeiro, como no servidor
 /* guarda a venda neste aparelho, baixa o stock localmente e devolve o recibo provisório */
 function enfileirarVenda(ref, dados, t) {
   const itens = dados.itens.map(c => {
@@ -100,9 +101,17 @@ function enfileirarVenda(ref, dados, t) {
     recebido: dados.pagamento === 'Numerário' ? dados.recebido : 0, troco: dados.pagamento === 'Numerário' && dados.recebido > 0 ? r2(dados.recebido - t.tot) : 0, itens };
   const f = lerFila(); f.push({ ref, uid: S.perfil.id, loja: S.perfil.loja_id, itens: dados.itens, pagamento: dados.pagamento, cliente: dados.cliente, desconto: t.desc, recebido: dados.recebido, data: agora, venda, erro: null });
   if (!jSet(FILA_K, f)) throw new Error('Não há espaço neste aparelho para guardar a venda. Ligue-se à internet.');
-  itens.forEach(i => { // baixa local (validade mais próxima primeiro)
-    const p = prodById(i.produto_id); let falta = i.un;
-    p.lotes.slice().sort((a, b) => (a.validade || '9999').localeCompare(b.validade || '9999')).forEach(l => { if (falta > 0 && (!l.validade || diasPara(l.validade) >= 0)) { const x = Math.min(l.qtd, falta); l.qtd -= x; falta -= x; } });
+  // baixa local, igual à do servidor: primeiro as embalagens fechadas, depois as unidades (soltas primeiro; só então se abre caixa)
+  const norm = (p, l) => { if (!p.un_por_caixa) l.soltas = l.qtd; else l.soltas = l.qtd - Math.floor((l.qtd - Math.min(l.soltas, l.qtd)) / p.un_por_caixa) * p.un_por_caixa; };
+  const lotesOrd = p => p.lotes.filter(naValidade).sort((a, b) => (a.validade || '9999').localeCompare(b.validade || '9999'));
+  p_ordem(itens).forEach(i => {
+    const p = prodById(i.produto_id); p.lotes.forEach(l => { if (l.soltas == null) l.soltas = soltasDe(p, l); });
+    let falta = i.caixa ? i.qtd : i.un;
+    if (i.caixa) lotesOrd(p).forEach(l => { const t = Math.min(Math.floor((l.qtd - l.soltas) / p.un_por_caixa), falta); if (t > 0) { l.qtd -= t * p.un_por_caixa; falta -= t; norm(p, l); } });
+    else {
+      lotesOrd(p).forEach(l => { const t = Math.min(l.soltas, falta); if (t > 0) { l.qtd -= t; l.soltas -= t; falta -= t; } });
+      if (p.un_por_caixa) lotesOrd(p).forEach(l => { if (falta <= 0) return; const k = Math.min(Math.floor((l.qtd - l.soltas) / p.un_por_caixa), Math.ceil(falta / p.un_por_caixa)), t = Math.min(k * p.un_por_caixa, falta); if (k > 0) { l.qtd -= t; l.soltas += k * p.un_por_caixa - t; falta -= t; } });
+    }
   });
   if (dados.pagamento === 'Fiado' && dados.cliente) { const c = S.clientes.find(x => x.id === dados.cliente); if (c) c.divida = r2(+c.divida + t.tot); }
   guardarCache(); netUpdate();

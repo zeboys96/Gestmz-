@@ -333,6 +333,13 @@ async function recarregarProdutos() {
 async function recarregarLoja() { const r = await q(sb.from('lojas').select('*').eq('id', S.perfil.loja_id)); S.loja = r[0]; banner(); }
 const prodById = id => S.produtos.find(p => p.id === id);
 const estoque = p => p.lotes.reduce((a, l) => a + l.qtd, 0);
+/* stock por caixas fechadas e unidades soltas (lotes.soltas = unidades soltas; o resto está em caixas fechadas) */
+const soltasDe = (p, l) => p.un_por_caixa ? Math.min(l.qtd, l.soltas == null ? l.qtd % p.un_por_caixa : l.soltas) : l.qtd;
+const naValidade = l => !l.validade || diasPara(l.validade) >= 0;
+const soltasP = p => p.lotes.reduce((a, l) => a + soltasDe(p, l), 0);
+const caixasP = p => p.un_por_caixa ? p.lotes.reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
+const caixasVend = p => p.un_por_caixa ? p.lotes.filter(naValidade).reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
+const stockTxt = p => p.un_por_caixa ? `${caixasP(p)} ${(p.embalagem || 'caixa').toLowerCase()}(s) fechada(s) + ${soltasP(p)} solta(s)` : '';
 const vendavel = p => p.lotes.filter(l => !l.validade || diasPara(l.validade) >= 0).reduce((a, l) => a + l.qtd, 0);
 const proxVal = p => { const ls = p.lotes.filter(l => l.validade).sort((a, b) => a.validade.localeCompare(b.validade)); return ls[0] ? ls[0].validade : ''; };
 function estado(p) {
