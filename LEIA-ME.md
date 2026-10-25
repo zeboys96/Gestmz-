@@ -61,6 +61,12 @@ O lojista abre **Assinatura**, escolhe o plano, transfere para o número indicad
 
 O lojista abre **Suporte** e escreve uma dúvida, sugestão ou problema. O dono do sistema recebe o aviso, responde e a conversa fica registada.
 
+## Ícone e arranque da aplicação Android
+
+O Capacitor cria a pasta `android/` de raiz em cada compilação, por isso, sem este passo, o APK saía sempre com o ícone e o splash padrão do Capacitor. A compilação agora corre `resources/aplicar-android.py`, que aplica o logótipo do GestMZ (o mesmo de `www/icon.svg`): ícone normal, redondo e adaptativo (barras amarelas sobre verde #00453A), splash verde com o logótipo (Android 12+ e anteriores) e fundo verde até a interface carregar. Se o modelo do Capacitor mudar, o script falha e a compilação pára, em vez de gerar um APK com o ícone errado. Para trocar o logótipo: altere as cores/desenho em `resources/gerar-icones.js`, corra `node resources/gerar-icones.js` e faça commit.
+
+O `supabase.js` é guardado dentro da aplicação durante a compilação (APK e site), e as fontes carregam em segundo plano, para a abertura não ficar parada à espera da internet. O identificador `mz.gestmz.app` e o nome «GestMZ» não foram alterados.
+
 ## Instalar no telemóvel
 
 Abra o endereço no Chrome, toque nos três pontos e escolha **Instalar aplicação**. Para um ficheiro APK, no GitHub abra *Actions → Gerar APK → Run workflow*.

@@ -2,5 +2,6 @@
   "appId": "mz.gestmz.app",
   "appName": "GestMZ",
   "webDir": "www",
+  "backgroundColor": "#00453A",
   "server": { "androidScheme": "https" }
 }
