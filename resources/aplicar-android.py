@@ -10,7 +10,13 @@ MANIFESTO = os.path.join(RAIZ, 'android', 'app', 'src', 'main', 'AndroidManifest
 MEUS = os.path.join(RAIZ, 'resources', 'android', 'res')
 
 def erro(m):
-    print('ERRO: ' + m); sys.exit(1)
+    # além do texto normal, escreve uma anotação do GitHub (aparece no resumo da execução) com o conteúdo que interessa para diagnosticar
+    extra = ''
+    for f in (os.path.join(RES, 'values', 'styles.xml'), MANIFESTO):
+        try: extra += '\n--- ' + os.path.relpath(f, RAIZ) + ' ---\n' + open(f, encoding='utf-8').read()[:1800]
+        except Exception: pass
+    txt = ('ERRO: ' + m + extra).replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+    print('::error title=Identidade GestMZ::' + txt); print('ERRO: ' + m); sys.exit(1)
 
 if not os.path.isdir(RES): erro('android/app/src/main/res não existe. Corra primeiro `npx cap add android`.')
 man = open(MANIFESTO, encoding='utf-8').read()
