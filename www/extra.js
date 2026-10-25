@@ -27,7 +27,7 @@ function formEtiquetas(p) {
   if (p.codigo) opcoes.push({ id: 'un', t: 'Unidade', cod: p.codigo, caixa: false });
   if (p.un_por_caixa && p.codigo_caixa) opcoes.push({ id: 'cx', t: p.embalagem || 'Embalagem', cod: p.codigo_caixa, caixa: true });
   if (!opcoes.length) {
-    const cx = p.un_por_caixa && p.vende_unidade === false;
+    const cx = false;
     return modal('Etiquetas — ' + esc(p.nome), `<p>Este produto ainda não tem código de barras.</p><p class="muted small">Gere um código interno para ${cx ? 'a embalagem' : 'o produto'}, guarde-o e imprima a etiqueta para colar no produto.</p>`, {
       okText: 'Gerar código e continuar',
       onOk: async () => {

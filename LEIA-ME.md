@@ -23,7 +23,7 @@ O ecrã de entrada é igual para todos. O sistema reconhece o cargo e abre o pai
 
 ## Produtos: embalagem e unidade
 
-Registe o produto uma só vez, em *Produtos → + Novo produto* (se só vende pela embalagem inteira, desmarque «Vender também unidades soltas»: o caixa só vende a embalagem e o preço da unidade deixa de ser pedido):
+Registe o produto uma só vez, em *Produtos → + Novo produto*:
 
 1. **Informações:** nome, categoria (lista com pesquisa; pode criar uma nova na hora), descrição.
 2. **Como vende:** *Só por unidade* ou *Embalagem e unidade*. No segundo caso indique o nome da embalagem (caixa, pacote, fardo…), as unidades em cada uma e os códigos de barras da embalagem e da unidade (ou gere um código interno).

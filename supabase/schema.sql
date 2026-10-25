@@ -1133,12 +1133,11 @@ revoke execute on function public._definir_pin(uuid, text) from authenticated;
 revoke execute on function public.produtos_valida() from authenticated;
 
 -- =====================================================================
--- GestMZ — migração 07: venda só por embalagem, código de acesso verificado
+-- GestMZ — migração 07: código de acesso verificado
 -- no servidor, vendas sem internet (sem duplicados) e etiquetas.
 -- Não apaga dados. Segura para correr de novo.
 -- =====================================================================
 
-alter table public.produtos add column if not exists vende_unidade boolean not null default true;
 alter table public.vendas add column if not exists ref_cliente uuid;
 create unique index if not exists vendas_ref_cliente_uq on public.vendas(loja_id, ref_cliente) where ref_cliente is not null;
 
@@ -1156,8 +1155,7 @@ begin
   end if;
   if new.preco > 99999999 or coalesce(new.preco_caixa, 0) > 99999999 then raise exception 'Preço demasiado grande'; end if;
   if new.un_por_caixa is not null and new.un_por_caixa < 2 then raise exception 'Unidades por embalagem: indique 2 ou mais'; end if;
-  if new.un_por_caixa is null then new.codigo_caixa := null; new.preco_caixa := null; new.custo_caixa := null; new.embalagem := null; new.vende_unidade := true; end if;
-  if not new.vende_unidade and (new.preco_caixa is null or new.preco_caixa <= 0) then raise exception 'Para vender só por embalagem indique o preço da embalagem'; end if;
+  if new.un_por_caixa is null then new.codigo_caixa := null; new.preco_caixa := null; new.custo_caixa := null; new.embalagem := null; end if;
   if new.codigo is not null and new.codigo = new.codigo_caixa then
     raise exception 'O código da unidade e o da embalagem têm de ser diferentes';
   end if;
@@ -1272,7 +1270,6 @@ begin
     v_qtd := (it->>'qtd')::numeric;
     if v_qtd is null or v_qtd <= 0 or v_qtd <> trunc(v_qtd) then raise exception 'Quantidade inválida'; end if;
     v_caixa := coalesce((it->>'caixa')::boolean, false);
-    if not v_caixa and not coalesce(p.vende_unidade, true) then raise exception 'O produto % só se vende por embalagem', p.nome; end if;
     if v_caixa then
       if p.un_por_caixa is null or p.preco_caixa is null then raise exception 'O produto % não tem venda por embalagem', p.nome; end if;
       v_un := v_qtd * p.un_por_caixa; v_linha := v_qtd * p.preco_caixa;
