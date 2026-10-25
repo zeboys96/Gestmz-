@@ -23,7 +23,7 @@ O ecrã de entrada é igual para todos. O sistema reconhece o cargo e abre o pai
 
 ## Produtos: embalagem e unidade
 
-Registe o produto uma só vez, em *Produtos → + Novo produto*:
+Registe o produto uma só vez, em *Produtos → + Novo produto* (se só vende pela embalagem inteira, desmarque «Vender também unidades soltas»: o caixa só vende a embalagem e o preço da unidade deixa de ser pedido):
 
 1. **Informações:** nome, categoria (lista com pesquisa; pode criar uma nova na hora), descrição.
 2. **Como vende:** *Só por unidade* ou *Embalagem e unidade*. No segundo caso indique o nome da embalagem (caixa, pacote, fardo…), as unidades em cada uma e os códigos de barras da embalagem e da unidade (ou gere um código interno).
@@ -55,13 +55,13 @@ Abra o endereço no Chrome, toque nos três pontos e escolha **Instalar aplicaç
 
 ## Limites a conhecer
 
-- **Precisa de internet** para vender (o stock é partilhado entre os caixas). Venda sem internet com sincronização seria uma fase seguinte.
-- **O código de acesso é uma segunda confirmação no aparelho**, não uma segunda autenticação no servidor: quem tem o e-mail e a senha de um funcionário consegue chamar o servidor sem o código. Por isso o dono deve dar senhas diferentes a cada um e removê-lo quando sair.
+- **Vendas sem internet:** o aparelho guarda uma cópia dos produtos, do stock e dos clientes. Sem ligação, gerente e caixa continuam a vender (a app pede o código de acesso, verificado no próprio aparelho). As vendas ficam numa fila, aparecem no aviso «Sem internet · N venda(s) por enviar» e seguem sozinhas quando a ligação volta, sem duplicar. A venda guarda a hora em que foi feita (até 7 dias). Se o servidor recusar uma (por exemplo, o stock acabou entretanto noutro caixa), ela fica marcada com o motivo para o dono decidir. O stock é partilhado: dois caixas offline podem vender a mesma última unidade. Para abrir a app sem internet é preciso ter entrado uma vez com internet neste aparelho; ao sair, a cópia local é apagada.
+- **O código de acesso é verificado no servidor.** Sem ele, o servidor não mostra nem altera nada do gerente ou do caixa, mesmo a quem sabe o e-mail e a senha. Vale 12 horas por sessão. Para autorizar uma acção do caixa, o gerente escreve e-mail, senha e o seu código (o dono não tem código).
 - **Esqueceu a senha?** O funcionário pode mudar a senha em *Conta*. Se perdeu o acesso, o dono remove-o e cria de novo (o e-mail fica livre).
 - **Plano gratuito do Supabase** pausa o projecto após cerca de uma semana sem uso. Com lojas a pagar, passe ao plano pago.
 - **Pagamentos** são confirmados à mão. Pagamento automático por M-Pesa/e-Mola exige contrato com a operadora.
 - A câmara lê códigos no Chrome do Android. O leitor USB ou Bluetooth funciona em qualquer navegador.
-- Impressão de etiquetas com o código interno ainda não existe: gere o código, copie-o ou imprima-o à parte.
+- **Etiquetas:** em *Produtos → Etiquetas* imprime códigos de barras (Code 128) de 50 × 30 mm da unidade ou da embalagem, com nome e preço. Se o produto não tem código, a app gera um interno e guarda-o. O tamanho do papel escolhe-se na janela de impressão.
 - Os valores de IVA são indicativos. Confirme o enquadramento fiscal com o seu contabilista.
 
 ## Ficheiros
@@ -69,4 +69,4 @@ Abra o endereço no Chrome, toque nos três pontos e escolha **Instalar aplicaç
 - `www/` — a aplicação (é a pasta publicada)
 - `www/config.js` — endereço e chave pública do Supabase
 - `supabase/schema.sql` — base de dados completa (versão actual)
-- `supabase/migracao_05_*.sql` e `migracao_06_*.sql` — as duas últimas alterações, já aplicadas ao projecto Gestmz
+- `supabase/migracao_05_*.sql`, `migracao_06_*.sql` e `migracao_07_*.sql` — as últimas alterações, já aplicadas ao projecto Gestmz

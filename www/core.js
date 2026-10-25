@@ -41,7 +41,7 @@ const fh = v => new Date(v).toLocaleTimeString('pt-PT', { hour: '2-digit', minut
 const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/\s/g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
 const r2 = n => Math.round(n * 100) / 100;
 const diasPara = v => Math.round((new Date(v + 'T00:00:00') - new Date(ymd() + 'T00:00:00')) / 864e5);
-const nvenda = v => 'V-' + String(v.num).padStart(5, '0');
+const nvenda = v => v.num == null ? 'por enviar' : 'V-' + String(v.num).padStart(5, '0');
 const inicial = n => (String(n || '?').trim()[0] || '?').toUpperCase();
 const avatar = (p, c = '') => p && p.foto ? `<img class="avatar ${c}" src="${esc(p.foto)}" alt="">` : `<span class="avatar ${c}">${esc(inicial(p && p.nome))}</span>`;
 const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -55,6 +55,7 @@ const VIEWS = {};
 function traduz(m) {
   m = String(m || '');
   const t = [
+    [/failed to fetch|networkerror|load failed|network request failed|fetch failed/i, 'Sem ligação à internet.'],
     [/Invalid login credentials/i, 'Utilizador ou senha incorrectos.'],
     [/User already registered|already been registered/i, 'Este utilizador já existe. Escolha outro nome ou e-mail.'],
     [/Password should be at least/i, 'A senha deve ter pelo menos 6 caracteres.'],
@@ -209,7 +210,7 @@ function vPin(perfil, loja) {
     try {
       const ok = await q(sb.rpc('verificar_pin', { p_pin: d.pin.trim() }));
       if (!ok) throw new Error('Código de acesso incorrecto.');
-      try { sessionStorage.setItem('gestmz_pin_ok', perfil.id); } catch (x) { /* ok */ }
+      guardarPinLocal(perfil.id, d.pin.trim());
       await entrar();
     } catch (err) { erro(err); b.disabled = false; b.textContent = 'Aceder'; e.target.reset(); }
   };
@@ -249,11 +250,10 @@ function vSetupSuper() {
   };
 }
 async function sair() {
-  pararRT(); cart = [];
-  try { sessionStorage.removeItem('gestmz_pin_ok'); } catch (e) { /* ok */ }
+  pararRT(); cart = []; limparCache();
   try { await sb.auth.signOut(); } catch (e) { /* ok */ }
   S = { perfil: null, loja: null, plat: null, cats: [], produtos: [], clientes: [], equipa: [] };
-  vLogin();
+  netUpdate(); vLogin();
 }
 
 /* ---------- arranque ---------- */
@@ -261,6 +261,7 @@ async function boot() {
   if (!CFG.SUPABASE_KEY || /^COLE/.test(CFG.SUPABASE_KEY) || !window.supabase) return vFalta();
   sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
   sb.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT' && S.perfil) { S.perfil = null; pararRT(); vLogin('A sessão terminou. Entre de novo.'); } });
+  if (!navigator.onLine && jGet('gestmz_cache', null)) return entrarOffline();
   const { data } = await sb.auth.getSession();
   if (!data || !data.session) return vLogin();
   await entrar();
@@ -274,15 +275,16 @@ async function entrar() {
     if (!perfil.ativo) { await sb.auth.signOut(); return vLogin('Esta conta foi desativada. Fale com o dono da loja.'); }
     S.perfil = perfil;
     if (perfil.papel === 'super') { await carregarSuper(); shell(navSuper()); iniciarSuperRT(); return go('s_lojas'); }
+    if (perfil.papel !== 'dono' && await q(sb.rpc('pin_exigido'))) {   // o servidor só abre os dados depois do código de acesso
+      const lb = await q(sb.rpc('loja_basica'));
+      if (!lb) return vSemAcesso();
+      return vPin(perfil, lb);
+    }
     const lj = (await q(sb.from('lojas').select('*').eq('id', perfil.loja_id)))[0];
     if (!lj) return vSemAcesso();
     if (perfil.papel === 'dono' && lj.configurada === false) return vConfigurarLoja(perfil, lj);
-    if (perfil.papel !== 'dono') {
-      let ok = false; try { ok = sessionStorage.getItem('gestmz_pin_ok') === perfil.id; } catch (e) { /* ok */ }
-      if (!ok && await q(sb.rpc('pin_exigido'))) return vPin(perfil, lj);
-    }
-    await carregarLoja(); shell(navLoja()); iniciarRT(); go(perfil.papel === 'caixa' ? 'pdv' : 'painel'); primeiraAjuda();
-  } catch (e) { vErro(e.message); }
+    await carregarLoja(); S.offline = false; shell(navLoja()); iniciarRT(); go(perfil.papel === 'caixa' ? 'pdv' : 'painel'); primeiraAjuda(); sincronizarFila(); netUpdate();
+  } catch (e) { if (ehRede(e) && jGet('gestmz_cache', null)) return entrarOffline(); vErro(e.message); }
 }
 
 /* ---------- estrutura ---------- */
@@ -321,12 +323,12 @@ async function carregarLoja() {
     all(() => sb.from('perfis').select('id,nome,usuario,papel,foto,ativo,ultimo_acesso').eq('loja_id', id).order('nome'))
   ]);
   S.loja = lj[0]; S.plat = pl[0]; S.cats = cats; S.clientes = cli; S.equipa = eq;
-  S.produtos = juntar(prods, lotes);
+  S.produtos = juntar(prods, lotes); guardarCache();
 }
 const juntar = (prods, lotes) => prods.map(p => ({ ...p, lotes: lotes.filter(l => l.produto_id === p.id) }));
 async function recarregarProdutos() {
   const [prods, lotes] = await Promise.all([all(() => sb.from('produtos').select('*').eq('ativo', true).order('nome')), all(() => sb.from('lotes').select('*').gt('qtd', 0))]);
-  S.produtos = juntar(prods, lotes);
+  S.produtos = juntar(prods, lotes); guardarCache();
 }
 async function recarregarLoja() { const r = await q(sb.from('lojas').select('*').eq('id', S.perfil.loja_id)); S.loja = r[0]; banner(); }
 const prodById = id => S.produtos.find(p => p.id === id);
@@ -388,13 +390,17 @@ async function contarSuporte(avisar) {
 }
 
 /* ---------- autorização do gerente ---------- */
-async function verificarGerente(email, p) {
+async function verificarGerente(email, p, codigo) {
   const aux = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'gestmz-aux' } });
   const { data, error } = await aux.auth.signInWithPassword({ email: String(email).trim(), password: p });
   if (error) throw new Error('E-mail ou senha do gerente incorrectos.');
   const r = await q(aux.from('perfis').select('id,nome,papel,loja_id,ativo').eq('id', data.user.id));
   const pf = r[0];
   if (!pf || !pf.ativo || pf.loja_id !== S.loja.id || !['gerente', 'dono'].includes(pf.papel)) { await aux.auth.signOut(); throw new Error('Esse utilizador não é gerente nem dono desta loja.'); }
+  if (pf.papel === 'gerente') {   // o gerente confirma-se também com o código de acesso (o servidor só lhe abre os dados depois disso)
+    let ok = false; try { ok = await q(aux.rpc('verificar_pin', { p_pin: String(codigo || '').trim() })); } catch (e) { await aux.auth.signOut(); throw e; }
+    if (!ok) { await aux.auth.signOut(); throw new Error('Código de acesso do gerente incorrecto.'); }
+  }
   return { aux, nome: pf.nome, fim: () => aux.auth.signOut().catch(() => { }) };
 }
 /* Devolve { nome, aux, fim } quando autorizado, ou null se cancelado. Gerente/dono autorizam-se a si próprios. */
@@ -402,10 +408,10 @@ function autorizar(texto, acao, detalhe) {
   if (['gerente', 'dono'].includes(S.perfil.papel)) return Promise.resolve({ nome: S.perfil.nome, aux: sb, fim: () => { } });
   return new Promise(res => {
     let dado = null;
-    modal('Autorização do gerente', `<p class="muted">${esc(texto)}</p><p class="small muted">Só o gerente ou o dono podem autorizar. A acção fica registada.</p>${fld('E-mail do gerente', 'u', '', 'email', 'required autocapitalize="none"')}${fld('Senha do gerente', 'p', '', 'password', 'required')}`,
+    modal('Autorização do gerente', `<p class="muted">${esc(texto)}</p><p class="small muted">Só o gerente ou o dono podem autorizar. A acção fica registada.</p>${fld('E-mail do gerente', 'u', '', 'email', 'required autocapitalize="none"')}${fld('Senha do gerente', 'p', '', 'password', 'required')}${fld('Código de acesso do gerente (o dono não precisa)', 'c', '', 'password', 'inputmode="numeric" autocomplete="off"')}`,
       { okText: 'Autorizar', sticky: true, keepOnClose: true,
         onOk: async d => {
-          const g = await verificarGerente(d.u, d.p);
+          const g = await verificarGerente(d.u, d.p, d.c);
           await g.aux.rpc('registar_auditoria', { p_acao: acao, p_detalhe: `${detalhe} — pedido por ${S.perfil.nome}, autorizado por ${g.nome}` });
           dado = g; res(g);
         },

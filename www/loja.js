@@ -49,11 +49,12 @@ VIEWS.painel = async function () {
 
 /* ======================= CAIXA (PDV) ======================= */
 const cartKey = c => c.pid + '|' + (c.caixa ? 1 : 0);
+const soCx = p => p.vende_unidade === false && !!p.un_por_caixa;   // produto vendido só por embalagem
 const precoUn = (c, p) => c.caixa ? +p.preco_caixa : +p.preco;
 const unidadesDe = (c, p) => c.caixa ? c.qtd * p.un_por_caixa : c.qtd;
 function achar(cod) {
   cod = String(cod).trim(); if (!cod) return null;
-  for (const p of S.produtos) { if (p.codigo && p.codigo === cod) return { p, caixa: false }; if (p.codigo_caixa && p.codigo_caixa === cod) return { p, caixa: true }; }
+  for (const p of S.produtos) { if (p.codigo && p.codigo === cod) return { p, caixa: p.vende_unidade === false && !!p.un_por_caixa }; if (p.codigo_caixa && p.codigo_caixa === cod) return { p, caixa: true }; }
   return null;
 }
 const filtrarProdutos = t => { t = t.toLowerCase(); return S.produtos.filter(p => !t || p.nome.toLowerCase().includes(t) || (p.codigo || '').includes(t) || (p.codigo_caixa || '').includes(t) || (p.categoria || '').toLowerCase().includes(t)); };
@@ -71,7 +72,7 @@ VIEWS.pdv = async function () {
   const q = $('#q');
   window.pdvLista = () => {
     const l = filtrarProdutos(q.value.trim()).slice(0, 40);
-    $('#lista').innerHTML = l.length ? l.map(p => { const v = vendavel(p); return `<div class="pi" ${v <= 0 ? 'style="opacity:.55"' : ''}><button class="main" type="button" data-id="${p.id}" data-c="0"><b>${esc(p.nome)}</b><small>${esc(p.categoria || '')} · stock ${v}${p.un_por_caixa ? ` (${Math.floor(v / p.un_por_caixa)} ${esc((p.embalagem || 'caixa').toLowerCase())}s)` : ''}${p.controlado ? ' · exige receita' : ''}</small></button><span class="px">${mt(p.preco)}</span>${p.un_por_caixa && p.preco_caixa ? `<button class="btn ghost sm" type="button" data-id="${p.id}" data-c="1" title="Vender a embalagem fechada">${esc(p.embalagem || 'Caixa')} ${p.un_por_caixa} un · ${mt(p.preco_caixa)}</button>` : ''}</div>`; }).join('') : `<div class="empty">Nenhum produto encontrado.${gestor ? '<br>Registe-o em “Produtos”.' : '<br>Peça ao gerente para o registar.'}</div>`;
+    $('#lista').innerHTML = l.length ? l.map(p => { const v = vendavel(p); return `<div class="pi" ${v <= 0 ? 'style="opacity:.55"' : ''}><button class="main" type="button" data-id="${p.id}" data-c="${soCx(p) ? 1 : 0}"><b>${esc(p.nome)}</b><small>${esc(p.categoria || '')} · stock ${v}${p.un_por_caixa ? ` (${Math.floor(v / p.un_por_caixa)} ${esc((p.embalagem || 'caixa').toLowerCase())}s)` : ''}${p.controlado ? ' · exige receita' : ''}</small></button><span class="px">${mt(soCx(p) ? p.preco_caixa : p.preco)}</span>${p.un_por_caixa && p.preco_caixa && !soCx(p) ? `<button class="btn ghost sm" type="button" data-id="${p.id}" data-c="1" title="Vender a embalagem fechada">${esc(p.embalagem || 'Caixa')} ${p.un_por_caixa} un · ${mt(p.preco_caixa)}</button>` : ''}</div>`; }).join('') : `<div class="empty">Nenhum produto encontrado.${gestor ? '<br>Registe-o em “Produtos”.' : '<br>Peça ao gerente para o registar.'}</div>`;
   };
   $('#lista').onclick = e => { const b = e.target.closest('button[data-id]'); if (b) { pdvAdd(b.dataset.id, b.dataset.c === '1'); if (innerWidth > 900) q.focus(); } };
   q.oninput = pdvLista;
@@ -79,7 +80,7 @@ VIEWS.pdv = async function () {
     if (e.key !== 'Enter') return; e.preventDefault(); const t = q.value.trim(); if (!t) return;
     const r = achar(t);
     if (r) { pdvAdd(r.p.id, r.caixa); q.value = ''; pdvLista(); return; }
-    const m = filtrarProdutos(t); if (m.length === 1) { pdvAdd(m[0].id, false); q.value = ''; pdvLista(); } else { toast('Código ou produto não encontrado.', true); q.select(); }
+    const m = filtrarProdutos(t); if (m.length === 1) { pdvAdd(m[0].id, soCx(m[0])); q.value = ''; pdvLista(); } else { toast('Código ou produto não encontrado.', true); q.select(); }
   };
   $('#cam').onclick = () => lerCamera(c => { const r = achar(c); if (r) pdvAdd(r.p.id, r.caixa); else { q.value = c; pdvLista(); toast('Código ' + c + ' não registado.', true); } });
   $('#cart').onclick = async e => {
@@ -103,6 +104,7 @@ VIEWS.pdv = async function () {
 };
 function pdvAdd(pid, caixa) {
   const p = prodById(pid); if (!p) return;
+  if (soCx(p)) caixa = true;
   if (!assin().ok) return toast('A subscrição expirou. Renove para vender.', true);
   if (caixa && (!p.un_por_caixa || !p.preco_caixa)) return toast('Este produto não tem venda por embalagem.', true);
   const usado = cart.filter(c => c.pid === pid).reduce((s, c) => s + unidadesDe(c, p), 0), novo = caixa ? p.un_por_caixa : 1;
@@ -132,9 +134,14 @@ async function pdvFinalizar() {
   if (pg === 'Fiado' && !cli) return toast('Escolha o cliente para vender a fiado.', true);
   if (pg === 'Numerário' && rec && rec < t.tot) return toast('O valor recebido é menor que o total.', true);
   b.disabled = true;
+  const dados = { itens: cart.map(c => ({ produto_id: c.pid, qtd: c.qtd, caixa: c.caixa })), pagamento: pg, cliente: cli || null, recebido: rec }, ref = uuid();
   try {
-    const itens = cart.map(c => ({ produto_id: c.pid, qtd: c.qtd, caixa: c.caixa }));
-    const v = await q(sb.rpc('registar_venda', { p_itens: itens, p_pagamento: pg, p_cliente: cli || null, p_desconto: t.desc, p_recebido: rec }));
+    let v;
+    try { if (!navigator.onLine) throw new Error(SEM_NET); v = await q(sb.rpc('registar_venda', { p_itens: dados.itens, p_pagamento: pg, p_cliente: dados.cliente, p_desconto: t.desc, p_recebido: rec, p_ref: ref })); }
+    catch (e) {
+      if (!ehRede(e)) throw e;   // sem ligação: a venda fica guardada neste aparelho e segue depois (a mesma referência impede duplicados)
+      v = enfileirarVenda(ref, dados, t); cart = []; await VIEWS.pdv(); bip(); toast('Sem internet: venda guardada neste aparelho. Segue quando houver ligação.'); mostrarRecibo(v); return;
+    }
     cart = [];
     const cl = await all(() => sb.from('clientes').select('*').order('nome')); S.clientes = cl;
     await recarregarProdutos(); await VIEWS.pdv(); bip(); mostrarRecibo(v);
@@ -151,7 +158,7 @@ function reciboHTML(v) {
   <hr><div class="c">Obrigado pela preferência!<br>Guarde este recibo.</div></div>`;
 }
 function mostrarRecibo(v) {
-  const w = modal('Venda ' + nvenda(v), reciboHTML(v) + `<div class="mf" style="justify-content:center"><button type="button" class="btn" id="pr">Imprimir recibo</button>${!v.anulada ? '<button type="button" class="btn ghost" id="an">Anular venda</button>' : ''}</div>`, {});
+  const w = modal('Venda ' + nvenda(v), reciboHTML(v) + `<div class="mf" style="justify-content:center"><button type="button" class="btn" id="pr">Imprimir recibo</button>${!v.anulada && !v.pendente ? '<button type="button" class="btn ghost" id="an">Anular venda</button>' : ''}</div>`, {});
   $('#pr', w.m).onclick = () => imprimir(reciboHTML(v));
   const an = $('#an', w.m); if (an) an.onclick = () => anularVenda(v, w);
 }
@@ -194,14 +201,14 @@ VIEWS.produtos = async function () {
     const t = pf.q.toLowerCase();
     const l = S.produtos.filter(p => (!t || p.nome.toLowerCase().includes(t) || (p.codigo || '').includes(t) || (p.codigo_caixa || '').includes(t) || (p.categoria || '').toLowerCase().includes(t)) && (!pf.c || p.categoria === pf.c) &&
       (pf.f === 'todos' || (pf.f === 'baixo' && estoque(p) > 0 && estoque(p) <= p.minimo) || (pf.f === 'sem' && estoque(p) <= 0) || (pf.f === 'expira' && p.lotes.some(x => x.validade && diasPara(x.validade) <= 90))));
-    $('#tb').innerHTML = l.length ? `<div class="tw"><table><tr><th>Produto</th><th>Categoria</th><th class="n">Stock</th><th class="n">Preço</th><th>Validade</th><th>Estado</th><th></th></tr>${l.map(p => { const s = estado(p), e = estoque(p); return `<tr><td><b>${esc(p.nome)}</b>${p.controlado ? ' <span class="tag baixo">receita</span>' : ''}<br><span class="muted small">${esc(p.codigo || 'sem código')}${p.un_por_caixa ? ' · caixa ' + esc(p.codigo_caixa || '—') + ' (' + p.un_por_caixa + ' un)' : ''}</span></td><td>${esc(p.categoria || '—')}</td><td class="n">${e}${p.un_por_caixa ? `<br><span class="muted small">${Math.floor(e / p.un_por_caixa)} ${esc((p.embalagem || 'caixa').toLowerCase())}s</span>` : ''}</td><td class="n">${mt(p.preco)}${p.preco_caixa ? `<br><span class="muted small">caixa ${mt(p.preco_caixa)}</span>` : ''}</td><td>${fd(proxVal(p))}</td><td><span class="tag ${s}">${ESTADO_TXT[s]}</span></td><td class="act">${adm ? `<button class="btn ghost sm" data-a="in" data-id="${p.id}">+ Stock</button><button class="btn ghost sm" data-a="out" data-id="${p.id}">Baixa</button><button class="btn ghost sm" data-a="ed" data-id="${p.id}">Editar</button><button class="btn ghost sm" data-a="del" data-id="${p.id}" aria-label="Apagar">Apagar</button>` : ''}</td></tr>`; }).join('')}</table></div>` : `<div class="empty">Nenhum produto. ${adm ? 'Toque em “+ Novo produto” para começar.' : ''}</div>`;
+    $('#tb').innerHTML = l.length ? `<div class="tw"><table><tr><th>Produto</th><th>Categoria</th><th class="n">Stock</th><th class="n">Preço</th><th>Validade</th><th>Estado</th><th></th></tr>${l.map(p => { const s = estado(p), e = estoque(p); return `<tr><td><b>${esc(p.nome)}</b>${p.controlado ? ' <span class="tag baixo">receita</span>' : ''}<br><span class="muted small">${esc(p.codigo || 'sem código')}${p.un_por_caixa ? ' · caixa ' + esc(p.codigo_caixa || '—') + ' (' + p.un_por_caixa + ' un)' : ''}</span></td><td>${esc(p.categoria || '—')}</td><td class="n">${e}${p.un_por_caixa ? `<br><span class="muted small">${Math.floor(e / p.un_por_caixa)} ${esc((p.embalagem || 'caixa').toLowerCase())}s</span>` : ''}</td><td class="n">${mt(p.preco)}${p.preco_caixa ? `<br><span class="muted small">caixa ${mt(p.preco_caixa)}</span>` : ''}</td><td>${fd(proxVal(p))}</td><td><span class="tag ${s}">${ESTADO_TXT[s]}</span></td><td class="act">${adm ? `<button class="btn ghost sm" data-a="in" data-id="${p.id}">+ Stock</button><button class="btn ghost sm" data-a="out" data-id="${p.id}">Baixa</button><button class="btn ghost sm" data-a="et" data-id="${p.id}">Etiquetas</button><button class="btn ghost sm" data-a="ed" data-id="${p.id}">Editar</button><button class="btn ghost sm" data-a="del" data-id="${p.id}" aria-label="Apagar">Apagar</button>` : ''}</td></tr>`; }).join('')}</table></div>` : `<div class="empty">Nenhum produto. ${adm ? 'Toque em “+ Novo produto” para começar.' : ''}</div>`;
   };
   $('#q').oninput = e => { pf.q = e.target.value; draw(); }; $('#c').onchange = e => { pf.c = e.target.value; draw(); }; $('#f').onchange = e => { pf.f = e.target.value; draw(); };
   if (adm) {
     $('#novo').onclick = () => formProduto(); $('#cats').onclick = gerirCategorias; $('#ent').onclick = escolherEntrada;
     $('#tb').onclick = e => {
       const b = e.target.closest('button'); if (!b) return; const p = prodById(b.dataset.id);
-      if (b.dataset.a === 'ed') formProduto(p); if (b.dataset.a === 'in') formEntrada(p); if (b.dataset.a === 'out') formBaixa(p);
+      if (b.dataset.a === 'et') formEtiquetas(p); if (b.dataset.a === 'ed') formProduto(p); if (b.dataset.a === 'in') formEntrada(p); if (b.dataset.a === 'out') formBaixa(p);
       if (b.dataset.a === 'del') ask(`Apagar «${p.nome}»? O histórico de vendas é mantido.`, async () => { await q(sb.from('produtos').update({ ativo: false }).eq('id', p.id)); await recarregarProdutos(); go('produtos', true); }, 'Apagar', true);
     };
   }
@@ -256,7 +263,7 @@ const fe = (el, msg) => { // erro junto ao campo
   s.textContent = msg || ''; el.classList.toggle('bad', !!msg); if (msg) el.setAttribute('aria-invalid', 'true'); else el.removeAttribute('aria-invalid');
 };
 function formProduto(p) {
-  const novo = !p; p = p || { nome: '', descricao: '', codigo: '', categoria: '', categoria_id: null, unidade: 'un', custo: '', preco: '', minimo: 10, iva: 0, controlado: false, codigo_caixa: '', un_por_caixa: '', preco_caixa: '', custo_caixa: '', embalagem: 'Caixa', ativo: true };
+  const novo = !p; p = p || { nome: '', descricao: '', codigo: '', categoria: '', categoria_id: null, unidade: 'un', custo: '', preco: '', minimo: 10, iva: 0, controlado: false, codigo_caixa: '', un_por_caixa: '', preco_caixa: '', custo_caixa: '', embalagem: 'Caixa', vende_unidade: true, ativo: true };
   const emb0 = !!p.un_por_caixa, saude = eSaude(S.loja.tipo);
   const catAtual = { id: p.categoria_id || (S.cats.find(c => c.nome === p.categoria) || {}).id || null, nome: p.categoria || '' };
   const custoCx0 = p.custo_caixa != null && p.custo_caixa !== '' ? p.custo_caixa : (emb0 && p.custo ? r2(p.custo * p.un_por_caixa) : '');
@@ -274,6 +281,8 @@ function formProduto(p) {
       <p class="small muted">Registe o produto <b>uma só vez</b>. Ao ler o código da <b>embalagem</b> vende a embalagem inteira; ao ler o código da <b>unidade</b> vende 1. O stock fica sempre em unidades.</p>
       <div class="row"><label>Nome da embalagem<input class="in" name="embalagem" list="dl-emb" value="${esc(p.embalagem || 'Caixa')}" maxlength="20" autocomplete="off"><datalist id="dl-emb">${EMBALAGENS.map(x => `<option value="${x}">`).join('')}</datalist></label>
       <label>Unidades em cada embalagem *<input class="in" name="un_por_caixa" inputmode="numeric" value="${esc(p.un_por_caixa || '')}" placeholder="Ex.: 20" autocomplete="off"></label></div>
+      <label class="chk"><input type="checkbox" name="vende_unidade" ${p.vende_unidade === false ? '' : 'checked'}> Vender também unidades soltas</label>
+      <p class="small muted" id="hSo" hidden>Sem esta opção, o produto só se vende pela embalagem inteira. O preço da unidade deixa de ser necessário.</p>
       <label>Código de barras da embalagem<div class="row" style="gap:8px;flex-wrap:nowrap"><input class="in" name="codigo_caixa" inputmode="numeric" value="${esc(p.codigo_caixa || '')}" autocomplete="off" placeholder="Passe o leitor aqui"><button type="button" class="btn ghost sm" data-gen="codigo_caixa" style="flex:none">Gerar interno</button></div></label>
     </div>
     <label>Código de barras da unidade<div class="row" style="gap:8px;flex-wrap:nowrap"><input class="in" name="codigo" inputmode="numeric" value="${esc(p.codigo || '')}" autocomplete="off" placeholder="Passe o leitor aqui (opcional)"><button type="button" class="btn ghost sm" data-gen="codigo" style="flex:none">Gerar interno</button></div><span class="hint">Se o produto não tem código, gere um código interno e cole-o numa etiqueta.</span></label>
@@ -282,7 +291,7 @@ function formProduto(p) {
     <div class="row"><label id="lCusto">Custo de aquisição por unidade (MT)<input class="in" name="custo" inputmode="decimal" value="${esc(emb0 ? '' : p.custo)}" placeholder="0,00" autocomplete="off"></label>
     <label id="lCustoCx" ${emb0 ? '' : 'hidden'}><span id="tCustoCx">Custo da embalagem (MT)</span><input class="in" name="custo_caixa" inputmode="decimal" value="${esc(custoCx0)}" placeholder="Ex.: 400" autocomplete="off"></label></div>
     <div class="row"><label id="lPrecoCx" ${emb0 ? '' : 'hidden'}>Preço de venda da embalagem (MT)<input class="in" name="preco_caixa" inputmode="decimal" value="${esc(p.preco_caixa || '')}" placeholder="Ex.: 500" autocomplete="off"></label>
-    <label>Preço de venda por unidade (MT) *<input class="in" name="preco" inputmode="decimal" value="${esc(p.preco)}" placeholder="Ex.: 30" autocomplete="off"></label></div>
+    <label id="lPreco"><span id="tPreco">Preço de venda por unidade (MT) *</span><input class="in" name="preco" inputmode="decimal" value="${esc(p.preco)}" placeholder="Ex.: 30" autocomplete="off"></label></div>
     <div id="calc" class="calc" aria-live="polite"></div>
     <label>IVA<select class="in" name="iva"><option value="0" ${!p.iva ? 'selected' : ''}>Isento (0%)</option><option value="16" ${p.iva === 16 ? 'selected' : ''}>16%</option></select></label>
   </section>
@@ -300,7 +309,8 @@ function formProduto(p) {
       if (!T('nome')) E('nome', 'Escreva o nome do produto.');
       if (!catAtual.id) { er++; fe($('#catbtn', f), 'Escolha a categoria.'); }
       const un = parseInt(T('un_por_caixa')), pu = num(T('preco')), pc = num(T('preco_caixa')), cc = num(T('custo_caixa')), cu = emb ? (cc && un >= 2 ? r2(cc / un) : 0) : num(T('custo'));
-      if (!(pu > 0)) E('preco', 'Indique o preço de venda por unidade.');
+      const vu = !emb || (g('vende_unidade') ? g('vende_unidade').checked : true);
+      if (vu && !(pu > 0)) E('preco', 'Indique o preço de venda por unidade.');
       if (emb) {
         if (!(un >= 2)) E('un_por_caixa', 'Indique quantas unidades tem cada embalagem (2 ou mais).');
         if (!(pc > 0)) E('preco_caixa', 'Indique o preço de venda da embalagem.');
@@ -313,7 +323,7 @@ function formProduto(p) {
       // códigos já usados por outro produto (a base de dados também confirma)
       for (const [n, v] of [['codigo', T('codigo')], ['codigo_caixa', emb ? T('codigo_caixa') : '']]) { if (!v) continue; const o = S.produtos.find(x => x.id !== (p.id || '') && (x.codigo === v || x.codigo_caixa === v)); if (o) E(n, `Este código já pertence a «${o.nome}».`); }
       if (er) { const m = f.querySelector('.bad'); if (m) m.focus(); toast('Corrija os campos assinalados.', true); return false; }
-      const o = { nome: T('nome'), descricao: T('descricao') || null, categoria_id: catAtual.id, categoria: catAtual.nome, unidade: T('unidade'), custo: cu, preco: pu, minimo: parseInt(T('minimo')) || 0, iva: parseInt(T('iva')) || 0,
+      const o = { nome: T('nome'), descricao: T('descricao') || null, categoria_id: catAtual.id, categoria: catAtual.nome, unidade: T('unidade'), custo: cu, preco: pu || 0, vende_unidade: vu, minimo: parseInt(T('minimo')) || 0, iva: parseInt(T('iva')) || 0,
         controlado: g('controlado') ? g('controlado').checked : !!p.controlado, codigo: T('codigo') || null,
         codigo_caixa: emb ? (T('codigo_caixa') || null) : null, un_por_caixa: emb ? un : null, preco_caixa: emb ? pc : null, custo_caixa: emb && cc ? cc : null, embalagem: emb ? T('embalagem') : null };
       if (!novo) o.ativo = g('ativo') ? g('ativo').checked : true;
@@ -348,9 +358,10 @@ function formProduto(p) {
   };
   const modo = () => {
     const e = emb(); $('#bEmb', f).hidden = !e; $('#lCustoCx', f).hidden = !e; $('#lPrecoCx', f).hidden = !e; $('#lCusto', f).hidden = e; const qe = $('#lQe', f); if (qe) qe.hidden = !e;
-    $$('.seg label', f).forEach(l => l.classList.toggle('on', $('input', l).checked)); calcular();
+    $$('.seg label', f).forEach(l => l.classList.toggle('on', $('input', l).checked));
+    const so = e && g('vende_unidade') && !g('vende_unidade').checked; $('#hSo', f).hidden = !so; $('#tPreco', f).textContent = so ? 'Preço da unidade (não se vende solta)' : 'Preço de venda por unidade (MT) *'; calcular();
   };
-  f.addEventListener('input', calcular); f.addEventListener('change', e => { if (e.target.name === 'modo') modo(); });
+  f.addEventListener('input', calcular); f.addEventListener('change', e => { if (e.target.name === 'modo' || e.target.name === 'vende_unidade') modo(); });
   modo();
   $$('[data-gen]', f).forEach(b => b.onclick = () => { g(b.dataset.gen).value = gerarCodigoInterno(); toast('Código interno gerado. Cole-o numa etiqueta na embalagem.'); });
   const cb = $('#catbtn', f);
