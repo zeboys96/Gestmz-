@@ -1,4 +1,4 @@
 node_modules/
-android/
+/android/
 .DS_Store
 www/supabase.js
