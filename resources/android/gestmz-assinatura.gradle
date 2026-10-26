@@ -1,0 +1,21 @@
+// Assinatura de produção do GestMZ. Só entra em ação quando o CI fornece o keystore (segredos do GitHub).
+// Sem estas variáveis, a compilação continua a ser a de teste (debug), como antes.
+def gestmzKs = System.getenv('GESTMZ_KEYSTORE')
+if (gestmzKs) {
+    ['GESTMZ_KEYSTORE_PASSWORD', 'GESTMZ_KEY_ALIAS', 'GESTMZ_KEY_PASSWORD'].each {
+        if (!System.getenv(it)) throw new GradleException('Falta a variável ' + it + ' para assinar o APK.')
+    }
+    android {
+        signingConfigs {
+            gestmz {
+                storeFile file(gestmzKs)
+                storePassword System.getenv('GESTMZ_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('GESTMZ_KEY_ALIAS')
+                keyPassword System.getenv('GESTMZ_KEY_PASSWORD')
+            }
+        }
+        buildTypes {
+            release { signingConfig signingConfigs.gestmz }
+        }
+    }
+}

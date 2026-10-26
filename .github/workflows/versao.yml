@@ -1,0 +1,193 @@
+name: Preparar versão (Android e Windows)
+
+# Este workflow NUNCA publica uma versão. No máximo cria um RASCUNHO de Release (só visível para quem gere o repositório),
+# e só depois de aprovação manual no ambiente "aprovacao-release". Publicar e atualizar www/versions.json são passos humanos.
+# O workflow "Gerar APK" (apk.yml) continua igual e serve para testes rápidos.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tipo:
+        description: "teste = gera os artefactos para experimentar (APK de teste). candidata = APK assinado + instalador Windows + rascunho de Release."
+        type: choice
+        options: [teste, candidata]
+        default: teste
+
+concurrency:
+  group: versao
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    outputs:
+      versao: ${{ steps.v.outputs.versao }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Versões consistentes e testes
+        run: |
+          node scripts/verificar-versoes.js
+          node --test tests/*.test.js
+          for f in desktop/main.js desktop/preload.js desktop/preparar.js www/atualizacao.js; do node --check "$f"; done
+      - id: v
+        run: echo "versao=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+  android:
+    needs: validar
+    runs-on: ubuntu-latest
+    env:
+      VERSAO: ${{ needs.validar.outputs.versao }}
+      TIPO: ${{ inputs.tipo }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm install
+      - name: Guardar supabase-js e ZXing dentro da app
+        run: |
+          npm install --no-save @supabase/supabase-js@2.45.4 @zxing/library@0.21.3
+          cp node_modules/@supabase/supabase-js/dist/umd/supabase.js www/supabase.js
+          cp node_modules/@zxing/library/umd/index.min.js www/zxing.js
+          test -s www/supabase.js && test -s www/zxing.js
+          grep -q BrowserMultiFormatReader www/zxing.js
+      - run: npx cap add android
+      - name: Preparar a chave de assinatura (só na candidata)
+        if: ${{ inputs.tipo == 'candidata' }}
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_KEYPASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for n in KS_B64 KS_PASS KS_ALIAS KS_KEYPASS; do
+            if [ -z "${!n}" ]; then echo "::error title=Falta um segredo::Configure os segredos ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS e ANDROID_KEY_PASSWORD (Settings → Secrets and variables → Actions). Sem eles não se gera um APK que possa atualizar o instalado."; exit 1; fi
+          done
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/gestmz.jks"
+          test -s "$RUNNER_TEMP/gestmz.jks"
+          echo "GESTMZ_KEYSTORE=$RUNNER_TEMP/gestmz.jks" >> "$GITHUB_ENV"
+      - name: Aplicar identidade, versão e assinatura
+        env:
+          GESTMZ_EXIGIR_VERSAO: "1"
+          GESTMZ_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          GESTMZ_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          GESTMZ_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: python3 resources/aplicar-android.py
+      - run: npx cap sync android
+      - name: Compilar
+        env:
+          GESTMZ_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          GESTMZ_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          GESTMZ_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+          if [ "$TIPO" = "candidata" ]; then ./gradlew assembleRelease; else ./gradlew assembleDebug; fi
+      - name: Conferir o APK (versão, identificador, assinatura) e nomeá-lo
+        run: |
+          if [ "$TIPO" = "candidata" ]; then F=android/app/build/outputs/apk/release/app-release.apk; else F=android/app/build/outputs/apk/debug/app-debug.apk; fi
+          BT=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)
+          BAD=$("$BT"aapt2 dump badging "$F" | grep -E "^package")
+          echo "$BAD"
+          echo "$BAD" | grep -q "name='mz.gestmz.app'" || { echo "::error::applicationId inesperado"; exit 1; }
+          echo "$BAD" | grep -q "versionName='$VERSAO'" || { echo "::error::versionName do APK não é $VERSAO"; exit 1; }
+          CODE=$(node -p "const [a,b,c]='$VERSAO'.split('.').map(Number);a*10000+b*100+c")
+          echo "$BAD" | grep -q "versionCode='$CODE'" || { echo "::error::versionCode do APK não é $CODE"; exit 1; }
+          if [ "$TIPO" = "candidata" ]; then
+            "$BT"apksigner verify --print-certs "$F" | grep -E "certificate SHA-256 digest|Verified using" || { echo "::error::a assinatura não verifica"; exit 1; }
+          fi
+          mkdir -p saida
+          N="GestMZ-$VERSAO-android$( [ "$TIPO" = "candidata" ] || echo -teste ).apk"
+          cp "$F" "saida/$N"
+          (cd saida && sha256sum "$N" | tee "$N.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GestMZ-android-${{ needs.validar.outputs.versao }}-${{ inputs.tipo }}
+          path: saida/*
+          if-no-files-found: error
+
+  windows:
+    needs: validar
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSAO: ${{ needs.validar.outputs.versao }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"   # sem certificado de assinatura de código por agora (o Windows mostrará o aviso SmartScreen)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Guardar supabase-js e ZXing dentro da app
+        run: |
+          npm install --no-save @supabase/supabase-js@2.45.4 @zxing/library@0.21.3
+          cp node_modules/@supabase/supabase-js/dist/umd/supabase.js www/supabase.js
+          cp node_modules/@zxing/library/umd/index.min.js www/zxing.js
+          test -s www/supabase.js && test -s www/zxing.js
+      - name: Compilar o instalador
+        working-directory: desktop
+        run: |
+          npm install
+          npm run dist
+      - name: Conferir o que foi gerado
+        run: |
+          cd desktop/dist
+          ls -la
+          test -s "GestMZ-Setup-$VERSAO.exe" || { echo "::error::falta GestMZ-Setup-$VERSAO.exe"; exit 1; }
+          test -s latest.yml || { echo "::error::falta latest.yml (sem ele o Windows não encontra atualizações)"; exit 1; }
+          grep -q "version: $VERSAO" latest.yml || { echo "::error::latest.yml não é da versão $VERSAO"; exit 1; }
+          sha256sum "GestMZ-Setup-$VERSAO.exe" | tee "GestMZ-Setup-$VERSAO.exe.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GestMZ-windows-${{ needs.validar.outputs.versao }}
+          path: |
+            desktop/dist/GestMZ-Setup-*.exe
+            desktop/dist/GestMZ-Setup-*.exe.blockmap
+            desktop/dist/GestMZ-Setup-*.exe.sha256
+            desktop/dist/latest.yml
+          if-no-files-found: error
+
+  rascunho:
+    # Só na candidata, e só depois de alguém aprovar o ambiente "aprovacao-release" (configure "Required reviewers" em Settings → Environments).
+    # Cria um RASCUNHO de Release: não fica público nem é visto pelas apps até uma pessoa carregar em "Publish release".
+    if: ${{ inputs.tipo == 'candidata' }}
+    needs: [validar, android, windows]
+    runs-on: ubuntu-latest
+    environment: aprovacao-release
+    permissions:
+      contents: write
+    env:
+      VERSAO: ${{ needs.validar.outputs.versao }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: pacotes
+          merge-multiple: true
+      - name: Criar o rascunho
+        run: |
+          ls -la pacotes
+          if gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "::error::já existe uma Release v$VERSAO. Aumente a versão em package.json."; exit 1; fi
+          gh release create "v$VERSAO" pacotes/* --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" \
+            --title "GestMZ $VERSAO" --notes "Rascunho gerado automaticamente. Reveja as notas, teste os instaladores e só depois publique."
+          {
+            echo "### Rascunho v$VERSAO criado (não publicado)"
+            echo
+            echo "SHA-256 dos ficheiros:"
+            echo '```'
+            (cd pacotes && cat *.sha256)
+            echo '```'
+            echo "Depois de **publicar** a Release, prepare www/versions.json com: \`node scripts/atualizar-versions.js --plataforma android --versao $VERSAO --ficheiro GestMZ-$VERSAO-android.apk --notas \"...\" --saida proposta.json\` (e o mesmo para windows)."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,20 @@
+{
+  "name": "gestmz-desktop",
+  "version": "1.1.0",
+  "private": true,
+  "description": "GestMZ para Windows",
+  "author": "GestMZ",
+  "main": "main.js",
+  "scripts": {
+    "preparar": "node preparar.js",
+    "start": "node preparar.js && electron .",
+    "dist": "node preparar.js && electron-builder --win --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  }
+}

@@ -3,3 +3,6 @@ node_modules/
 .DS_Store
 www/supabase.js
 www/zxing.js
+desktop/node_modules/
+desktop/dist/
+desktop/www/

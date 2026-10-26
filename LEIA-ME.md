@@ -67,6 +67,17 @@ O Capacitor cria a pasta `android/` de raiz em cada compilação, por isso, sem 
 
 O `supabase.js` é guardado dentro da aplicação durante a compilação (APK e site), e as fontes carregam em segundo plano, para a abertura não ficar parada à espera da internet. O identificador `mz.gestmz.app` e o nome «GestMZ» não foram alterados.
 
+## Versões e atualizações (Android e Windows)
+
+A versão é uma só, em `package.json` (`x.y.z`). O `versionCode` do Android é calculado (1.2.3 → 10203). Para subir de versão altere `package.json`, `desktop/package.json` e `www/versao.js` e corra `node scripts/verificar-versoes.js`, que falha se estiverem diferentes.
+
+- **Web (Vercel):** sem alterações; atualiza-se sozinha.
+- **Android:** a app consulta `www/versions.json` (no ramo `main`) e avisa quando há versão nova. O Android não deixa instalar em silêncio: a app abre a transferência do APK da Release e o utilizador toca para instalar. Os dados mantêm-se **se o APK novo tiver a mesma assinatura**. Por isso a versão de produção é assinada com uma chave permanente guardada nos segredos do GitHub (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`). **Guarde cópias dessa chave fora do GitHub: sem ela não há atualizações por cima.** O primeiro APK assinado com a chave nova exige desinstalar uma vez o APK de teste atual (sincronize antes as vendas pendentes).
+- **Windows:** aplicação Electron (`desktop/`), instalador NSIS por utilizador, atualização com `electron-updater` a partir das Releases. Sem certificado de assinatura de código o Windows mostra o aviso SmartScreen.
+- **Preparar uma versão:** Actions → **Preparar versão** → *teste* (só artefactos) ou *candidata* (APK assinado + instalador + rascunho de Release, depois de aprovação no ambiente `aprovacao-release`; configure aí os *Required reviewers*). Nada é publicado sozinho.
+- **Publicar:** abra o rascunho, teste os instaladores, carregue em *Publish release*. Só depois gere a proposta com `scripts/atualizar-versions.js` e faça commit de `www/versions.json`: é isso que faz as apps avisarem.
+- **Reverter:** a versão não desce. Publique uma versão nova (número maior) com o código bom, ou ponha `bloquear: true`/`minima` em `versions.json` para forçar a atualização.
+
 ## Instalar no telemóvel
 
 Abra o endereço no Chrome, toque nos três pontos e escolha **Instalar aplicação**. Para um ficheiro APK, no GitHub abra *Actions → Gerar APK → Run workflow*.

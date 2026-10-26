@@ -2,7 +2,7 @@
 """Aplica a identidade do GestMZ ao projecto Android que o Capacitor acabou de criar (`npx cap add android`).
 A pasta android/ não está no repositório: é gerada em cada compilação, por isso o ícone e o splash do Capacitor
 voltavam sempre. Este script corre a seguir e falha (em vez de ignorar) se o modelo do Capacitor não tiver a forma esperada."""
-import glob, os, re, shutil, sys
+import glob, json, os, re, shutil, sys
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RES = os.path.join(RAIZ, 'android', 'app', 'src', 'main', 'res')
@@ -72,7 +72,28 @@ if extra:
     open(MANIFESTO, 'w', encoding='utf-8').write(man)
 if 'android.permission.CAMERA' not in open(MANIFESTO, encoding='utf-8').read(): erro('a permissão CAMERA não ficou no manifesto')
 
-# 5) verificações finais
+# 5) versão (package.json é a fonte única) e assinatura de produção (só quando o CI fornece o keystore)
+def aviso(m): print('::warning title=Versão GestMZ::' + m); print('AVISO: ' + m)
+exigir = os.environ.get('GESTMZ_EXIGIR_VERSAO') == '1'      # o workflow de versões exige; o apk.yml antigo só avisa
+GRADLE = os.path.join(RAIZ, 'android', 'app', 'build.gradle')
+ver = json.load(open(os.path.join(RAIZ, 'package.json'), encoding='utf-8')).get('version', '')
+mv = re.fullmatch(r'(\d+)\.(\d+)\.(\d+)', ver)
+if not mv or int(mv.group(2)) > 99 or int(mv.group(3)) > 99: erro('version do package.json inválida: %r (use x.y.z com minor e patch abaixo de 100)' % ver)
+codigo = int(mv.group(1)) * 10000 + int(mv.group(2)) * 100 + int(mv.group(3))
+g = open(GRADLE, encoding='utf-8').read()
+g, n1 = re.subn(r'versionCode\s+\d+', 'versionCode %d' % codigo, g, count=1)
+g, n2 = re.subn(r'versionName\s+"[^"]*"', 'versionName "%s"' % ver, g, count=1)
+if n1 != 1 or n2 != 1:
+    (erro if exigir else aviso)('não encontrei versionCode/versionName em android/app/build.gradle; a versão do APK não foi definida')
+else: print('versão do APK: %s (versionCode %d)' % (ver, codigo))
+if os.environ.get('GESTMZ_KEYSTORE'):
+    if not os.path.isfile(os.environ['GESTMZ_KEYSTORE']): erro('o ficheiro do keystore indicado em GESTMZ_KEYSTORE não existe')
+    shutil.copy2(os.path.join(RAIZ, 'resources', 'android', 'gestmz-assinatura.gradle'), os.path.join(RAIZ, 'android', 'app', 'gestmz-assinatura.gradle'))
+    if 'gestmz-assinatura.gradle' not in g: g += "\napply from: 'gestmz-assinatura.gradle'\n"
+    print('assinatura de produção ligada ao build.gradle')
+open(GRADLE, 'w', encoding='utf-8').write(g)
+
+# 6) verificações finais
 if glob.glob(os.path.join(RES, 'drawable*', 'splash.png')): erro('ficou um splash.png do Capacitor')
 for f in ('mipmap-xxxhdpi/ic_launcher.png', 'mipmap-xxxhdpi/ic_launcher_foreground.png', 'mipmap-anydpi-v26/ic_launcher.xml', 'drawable/gestmz_splash.xml', 'drawable-nodpi/gestmz_splash_icon.png'):
     if not os.path.isfile(os.path.join(RES, f)): erro('falta ' + f)

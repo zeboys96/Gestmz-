@@ -193,6 +193,7 @@ VIEWS.perfil = async function () {
   $('#fp').onsubmit = async e => { e.preventDefault(); try { const o = { nome: $('[name=nome]', e.target).value.trim() }; if (st.v) o.foto = st.v; await q(sb.from('perfis').update(o).eq('id', p.id)); Object.assign(S.perfil, o); toast('Perfil guardado.'); shell(S.perfil.papel === 'super' ? navSuper() : navLoja()); go('perfil', true); } catch (er) { erro(er); } };
   $('#fs').onsubmit = async e => { e.preventDefault(); try { const { error } = await sb.auth.updateUser({ password: $('[name=senha]', e.target).value }); if (error) throw new Error(traduz(error.message)); e.target.reset(); toast('Senha alterada.'); } catch (er) { erro(er); } };
   const fl = $('#fl'); if (fl) fl.onsubmit = async e => { e.preventDefault(); const d = Object.fromEntries(new FormData(fl)); try { await q(sb.rpc('atualizar_loja', { p_nome: d.nome, p_tipo: d.tipo, p_nuit: d.nuit, p_tel: d.tel, p_endereco: d.endereco })); await recarregarLoja(); shell(navLoja()); go('perfil', true); toast('Dados guardados.'); } catch (er) { erro(er); } };
+  if (window.GestMZAtualizacao) GestMZAtualizacao.cartaoConta($('#main'));
 };
 
 /* ======================= SUPORTE (dono da loja) ======================= */
