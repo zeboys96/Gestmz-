@@ -21,6 +21,12 @@ jobs:
           npm install --no-save @supabase/supabase-js@2.45.4
           cp node_modules/@supabase/supabase-js/dist/umd/supabase.js www/supabase.js
           test -s www/supabase.js
+      - name: Guardar o leitor de códigos (ZXing) dentro da app
+        run: |
+          npm install --no-save @zxing/library@0.21.3
+          cp node_modules/@zxing/library/umd/index.min.js www/zxing.js
+          test -s www/zxing.js
+          grep -q BrowserMultiFormatReader www/zxing.js
       - run: npx cap add android
       - name: Aplicar a identidade do GestMZ (ícone, splash e cores)
         run: python3 resources/aplicar-android.py

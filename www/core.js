@@ -144,10 +144,44 @@ function imgToData(file, max, quality, square) {
 function bip() { try { const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain(); o.connect(g); g.connect(a.destination); o.frequency.value = 880; g.gain.value = .08; o.start(); setTimeout(() => { o.stop(); a.close(); }, 180); } catch (e) { /* sem som */ } }
 
 /* ---------- câmara (ler código de barras) ---------- */
+/* Chrome tem BarcodeDetector; a WebView da app Android não. Nesse caso carrega-se o ZXing (zxing.js, guardado dentro da app na compilação). */
+const FORMATOS_CAM = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'];
+function carregarZXing() {
+  if (window.ZXing) return Promise.resolve(window.ZXing);
+  return new Promise((ok, no) => {
+    const s = document.createElement('script'); s.src = 'zxing.js';
+    s.onload = () => window.ZXing ? ok(window.ZXing) : no(new Error('zxing')); s.onerror = () => no(new Error('zxing'));
+    document.head.appendChild(s);
+  });
+}
+async function criarLeitor() {
+  if ('BarcodeDetector' in window) {
+    try { const det = new BarcodeDetector({ formats: FORMATOS_CAM }); return async v => { const r = await det.detect(v); return r.length ? r[0].rawValue : null; }; } catch (e) { /* tenta o ZXing */ }
+  }
+  const Z = await carregarZXing();
+  const F = Z.BarcodeFormat, H = new Map();
+  H.set(Z.DecodeHintType.POSSIBLE_FORMATS, [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF, F.QR_CODE]);
+  H.set(Z.DecodeHintType.TRY_HARDER, true);
+  const rd = new Z.MultiFormatReader(); rd.setHints(H);
+  const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+  return async v => {
+    if (!v.videoWidth) return null;
+    const k = Math.min(1, 960 / v.videoWidth); cv.width = Math.round(v.videoWidth * k); cv.height = Math.round(v.videoHeight * k);
+    cx.drawImage(v, 0, 0, cv.width, cv.height);
+    try { return rd.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(cv)))).getText(); } catch (e) { return null; /* nenhum código neste fotograma */ }
+  };
+}
+function erroCamera(e) {
+  const n = e && e.name;
+  if (n === 'NotAllowedError' || n === 'SecurityError') return 'A câmara está bloqueada. Nas Definições do Android abra Aplicações → GestMZ → Permissões → Câmara e permita.';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'Este aparelho não tem uma câmara disponível.';
+  if (n === 'NotReadableError' || n === 'AbortError') return 'A câmara está a ser usada por outra aplicação. Feche-a e tente de novo.';
+  return 'Não foi possível abrir a câmara' + (n ? ' (' + n + ')' : '') + '.';
+}
 async function lerCamera(onCode) {
-  if (!('BarcodeDetector' in window) || !navigator.mediaDevices) return toast('Este navegador não lê códigos pela câmara. Use um leitor USB/Bluetooth ou escreva o código.', true);
-  let det; try { det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] }); } catch (e) { return toast('Leitura por câmara indisponível neste aparelho.', true); }
-  let stream; try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); } catch (e) { return toast('Permita o acesso à câmara para ler códigos.', true); }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('Este aparelho não deixa abrir a câmara. Use um leitor USB/Bluetooth ou escreva o código.', true);
+  let ler; try { ler = await criarLeitor(); } catch (e) { return toast('Leitura por câmara indisponível neste aparelho. Use um leitor USB/Bluetooth ou escreva o código.', true); }
+  let stream; try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }); } catch (e) { return toast(erroCamera(e), true); }
   const w = document.createElement('div'); w.className = 'cam';
   w.innerHTML = '<video playsinline muted></video><div class="cb"><span>Aponte para o código de barras</span><button class="btn ghost" type="button">Fechar</button></div>';
   document.body.appendChild(w);
@@ -156,7 +190,7 @@ async function lerCamera(onCode) {
   $('button', w).onclick = fim;
   (async function loop() {
     while (vivo) {
-      try { const r = await det.detect(v); if (r.length) { const c = r[0].rawValue; fim(); if (navigator.vibrate) navigator.vibrate(60); onCode(c); return; } } catch (e) { /* tenta de novo */ }
+      try { const c = await ler(v); if (c && vivo) { fim(); if (navigator.vibrate) navigator.vibrate(60); onCode(c); return; } } catch (e) { /* tenta de novo */ }
       await new Promise(r => setTimeout(r, 250));
     }
   })();

@@ -59,7 +59,20 @@ acrescentar('AppTheme.NoActionBarLaunch', [
 acrescentar('AppTheme.NoActionBar', [('android:windowBackground', '@color/gestmz_verde')])
 open(sp, 'w', encoding='utf-8').write(s)
 
-# 4) verificações finais
+# 4) permissões: sem CAMERA no manifesto o Android recusa a câmara à WebView (getUserMedia falha com NotAllowedError)
+man = open(MANIFESTO, encoding='utf-8').read()
+extra = ''
+if 'android.permission.CAMERA' not in man:
+    extra += '    <uses-permission android:name="android.permission.CAMERA" />\n'
+if 'android.hardware.camera"' not in man:
+    extra += '    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />\n'
+if extra:
+    if '</manifest>' not in man: erro('AndroidManifest.xml sem </manifest>')
+    man = man.replace('</manifest>', extra + '</manifest>')
+    open(MANIFESTO, 'w', encoding='utf-8').write(man)
+if 'android.permission.CAMERA' not in open(MANIFESTO, encoding='utf-8').read(): erro('a permissão CAMERA não ficou no manifesto')
+
+# 5) verificações finais
 if glob.glob(os.path.join(RES, 'drawable*', 'splash.png')): erro('ficou um splash.png do Capacitor')
 for f in ('mipmap-xxxhdpi/ic_launcher.png', 'mipmap-xxxhdpi/ic_launcher_foreground.png', 'mipmap-anydpi-v26/ic_launcher.xml', 'drawable/gestmz_splash.xml', 'drawable-nodpi/gestmz_splash_icon.png'):
     if not os.path.isfile(os.path.join(RES, f)): erro('falta ' + f)
