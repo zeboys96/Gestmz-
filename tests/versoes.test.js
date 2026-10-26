@@ -115,7 +115,7 @@ test('workflow versao.yml: nunca publica; só cria rascunho, com aprovação, e 
   assert.ok(y.includes('--draft'), 'a Release tem de ser rascunho');
   assert.ok(!/--draft=false|--latest|release edit|prerelease=false/.test(y), 'não pode publicar');
   assert.match(y, /environment:\s*aprovacao-release/);
-  assert.ok(!/(^|\n)\s*(push|schedule|pull_request):/.test(y.split('jobs:')[0]), 'só arranca à mão');
+  const gat = y.split('jobs:')[0]; assert.ok(!/(^|\n)\s*(schedule|pull_request):/.test(gat) && !/branches:\s*\[(?!desenvolvimento\/atualizacoes\])/.test(gat), 'só arranca à mão (ou, temporariamente, no ramo de desenvolvimento)');
   const antigo = fs.readFileSync(path.join(R, '.github', 'workflows', 'apk.yml'), 'utf8');
   assert.ok(antigo.includes('assembleDebug') && antigo.includes('GestMZ-apk'), 'apk.yml continua a gerar o APK de teste');
   assert.ok(!/secrets\./.test(antigo), 'apk.yml não usa segredos');

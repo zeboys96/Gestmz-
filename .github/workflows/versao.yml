@@ -5,6 +5,11 @@ name: Preparar versão (Android e Windows)
 # O workflow "Gerar APK" (apk.yml) continua igual e serve para testes rápidos.
 
 on:
+  # TEMPORÁRIO: o GitHub só deixa lançar um workflow à mão quando ele já está no ramo principal. Para o validar sem fazer merge,
+  # corre em modo teste quando este ficheiro é enviado para o ramo de desenvolvimento. Remover antes do merge.
+  push:
+    branches: [desenvolvimento/atualizacoes]
+    paths: ['.github/workflows/versao.yml']
   workflow_dispatch:
     inputs:
       tipo:
