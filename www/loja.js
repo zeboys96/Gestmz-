@@ -96,7 +96,7 @@ VIEWS.pdv = async function () {
   $('#lmp').onclick = async () => {
     if (!cart.length) return;
     const g = await autorizar('Cancelar a venda em curso.', 'cancelar_venda_em_curso', `${cart.length} linha(s) descartadas`);
-    if (!g) return; g.fim(); cart = []; pdvDraw();
+    if (!g) return; g.fim(); cart = []; pdvLimparSelecao(); pdvDraw();
   };
   $('#fin').onclick = pdvFinalizar;
   pdvLista(); pdvDraw(); if (innerWidth > 900) q.focus();
@@ -111,6 +111,11 @@ function pdvAdd(pid, caixa) {
   const add = () => { const it = cart.find(c => c.pid === pid && c.caixa === caixa); if (it) it.qtd++; else cart.push({ pid, caixa, qtd: 1 }); pdvDraw(); };
   if (p.controlado && !cart.some(c => c.pid === pid)) return ask(`«${p.nome}» é medicamento controlado e exige receita médica. Confirma que a receita foi apresentada?`, add, 'Receita apresentada');
   add();
+}
+/* Volta ao estado inicial da venda seguinte. Só se chama depois de a venda estar gravada (ou guardada na fila) ou cancelada com autorização. */
+function pdvLimparSelecao() {
+  const set = (id, v) => { const e = $('#' + id); if (e) e.value = v; };
+  set('cli', ''); set('pag', 'Numerário'); set('rec', ''); set('desc', '0');
 }
 function pdvTotais() {
   let sub = 0, iva = 0;
@@ -139,11 +144,12 @@ async function pdvFinalizar() {
     try { if (!navigator.onLine) throw new Error(SEM_NET); v = await q(sb.rpc('registar_venda', { p_itens: dados.itens, p_pagamento: pg, p_cliente: dados.cliente, p_desconto: t.desc, p_recebido: rec, p_ref: ref })); }
     catch (e) {
       if (!ehRede(e)) throw e;   // sem ligação: a venda fica guardada neste aparelho e segue depois (a mesma referência impede duplicados)
-      v = enfileirarVenda(ref, dados, t); cart = []; await VIEWS.pdv(); bip(); toast('Sem internet: venda guardada neste aparelho. Segue quando houver ligação.'); mostrarRecibo(v); return;
+      v = enfileirarVenda(ref, dados, t); cart = []; pdvLimparSelecao(); await VIEWS.pdv(); bip(); toast('Sem internet: venda guardada neste aparelho. Segue quando houver ligação.'); mostrarRecibo(v); return;
     }
-    cart = [];
-    const cl = await all(() => sb.from('clientes').select('*').order('nome')); S.clientes = cl;
-    await recarregarProdutos(); await VIEWS.pdv(); bip(); mostrarRecibo(v);
+    // a venda ficou gravada: a seleção (cliente, pagamento, desconto) é limpa já, antes de qualquer atualização que possa falhar
+    cart = []; pdvLimparSelecao();
+    try { S.clientes = await all(() => sb.from('clientes').select('*').order('nome')); await recarregarProdutos(); } catch (e) { /* a venda está gravada; os dados atualizam-se na próxima leitura */ }
+    await VIEWS.pdv(); bip(); mostrarRecibo(v);
   } catch (e) { erro(e); b.disabled = false; await recarregarProdutos().catch(() => { }); if (window.pdvLista) pdvLista(); }
 }
 function anularVenda(v, w) {
