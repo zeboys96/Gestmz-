@@ -111,6 +111,7 @@ begin
     return old;
   end if;
 end $$;
+revoke all on function public.perfis_super_guard() from public, anon, authenticated;
 drop trigger if exists perfis_super_guard_trg on public.perfis;
 create trigger perfis_super_guard_trg before insert or update or delete on public.perfis
   for each row execute function public.perfis_super_guard();
