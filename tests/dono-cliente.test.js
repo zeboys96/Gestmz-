@@ -43,6 +43,10 @@ test('cliente: «Configurar o dono do sistema» falha fechado', { skip: !chromiu
       const tem = (await p.locator('#sup').count()) > 0;
       assert.strictEqual(tem, esperaBotao, nome + ': botão visível = ' + tem);
       assert.deepStrictEqual(erros, [], nome + ': erros JS ' + erros);
+      // o texto explicativo foi removido, mas o login mantém todos os campos e o botão
+      assert.ok(!(await p.locator('body').innerText()).includes('O acesso é dado pelo administrador'), nome + ': texto explicativo ainda presente');
+      assert.strictEqual(await p.locator('#f input[name=e]').count() + await p.locator('#f input[name=p]').count(), 2, nome + ': campos do login');
+      assert.strictEqual(await p.locator('#go').count(), 1, nome + ': botão Entrar');
       await ctx.close();
     }
     // sem Internet (navigator.onLine=false) com o servidor a dizer 'aberta' → continua fechado
