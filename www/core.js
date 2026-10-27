@@ -355,6 +355,7 @@ function shell(items) {
 }
 async function go(v, silencioso) {
   cur = v; $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  const ativo = $('#nav button.on'); if (ativo && ativo.scrollIntoView) { try { ativo.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ok */ } }
   if (!silencioso) { $('#main').innerHTML = '<div class="loading">A carregar…</div>'; }
   try { await VIEWS[v](); } catch (e) { $('#main').innerHTML = `<div class="card"><div class="msg bad">${esc(e.message)}</div><button class="btn" onclick="go('${v}')">Tentar de novo</button></div>`; }
   if (!silencioso) window.scrollTo(0, 0);
