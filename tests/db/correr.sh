@@ -14,6 +14,7 @@ for m in 05 06 07 08 09; do Q -f "$R"/supabase/migracao_${m}_*.sql >/dev/null 2>
 rm -f "$D/.err"
 Q -f "$D/ajuda.sql" >/dev/null
 if [ "${1:-}" != "--sem-migracao-10" ]; then Q -f "$R/supabase/migracao_10_inicializacao_segura.sql" >/dev/null || { echo "migração 10 falhou"; exit 3; }; fi
+[ "${GESTMZ_COM12:-}" = 1 ] && { Q -f "$R/supabase/migracao_12_permissoes_por_papel.sql" >/dev/null || { echo "migração 12 falhou"; exit 3; }; }   # GESTMZ_COM12=1: repete os testes com a migração 12 aplicada
 Q -f "$D/01_inicializacao.sql" >/dev/null
 # Inicialização legítima: o administrador autoriza (SQL de administração) e o dono configura-se uma vez.
 Q -c "insert into auth.users(id,email,created_at) values ('00000000-0000-0000-0000-0000000000a0','dono-sistema@teste.local',now()-interval '3 days')" >/dev/null

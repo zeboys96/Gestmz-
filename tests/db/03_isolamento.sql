@@ -12,9 +12,9 @@ select t.chk('controlo: o dono A vê a sua loja', t.como(:'A1', 'select count(*)
 select t.chk('controlo: o caixa A vende um produto da sua loja', t.como(:'A2', $$select (public.registar_venda('[{"produto_id":"f0000000-0000-0000-0000-00000000000a","qtd":1}]'::jsonb,'Numerário'))->>'total'$$), '^ok:10');
 -- leitura de dados de outra loja (RLS)
 select t.chk('RLS: o dono A não vê produtos da loja B', t.como(:'A1', $$select count(*) from public.produtos where loja_id = '22222222-2222-2222-2222-222222222222'$$), '^ok:0$');
-select t.chk('RLS: o dono A não vê vendas da loja B', t.como(:'A1', $$select count(*) from public.vendas where loja_id = '22222222-2222-2222-2222-222222222222'$$), '^ok:0$');
+select t.chk('RLS: o dono A não vê vendas da loja B (0 linhas ou acesso direto recusado)', t.como(:'A1', $$select count(*) from public.vendas where loja_id = '22222222-2222-2222-2222-222222222222'$$), '^(ok:0|ERRO.*permission)');
 select t.chk('RLS: o dono A não vê clientes da loja B', t.como(:'A1', $$select count(*) from public.clientes where loja_id = '22222222-2222-2222-2222-222222222222'$$), '^ok:0$');
-select t.chk('RLS: o dono A não vê lotes da loja B', t.como(:'A1', $$select count(*) from public.lotes where loja_id = '22222222-2222-2222-2222-222222222222'$$), '^ok:0$');
+select t.chk('RLS: o dono A não vê lotes da loja B (0 linhas ou acesso direto recusado)', t.como(:'A1', $$select count(*) from public.lotes where loja_id = '22222222-2222-2222-2222-222222222222'$$), '^(ok:0|ERRO.*permission)');
 select t.chk('RLS: o dono A não vê a equipa da loja B', t.como(:'A1', $$select count(*) from public.perfis where loja_id = '22222222-2222-2222-2222-222222222222'$$), '^ok:0$');
 select t.chk('RLS: o dono A não vê pedidos de suporte da loja B', t.como(:'A1', $$select count(*) from public.suporte_tickets where loja_id = '22222222-2222-2222-2222-222222222222'$$), '^ok:0$');
 select t.chk('RLS: o caixa A não vê a equipa (dono/gerente)', t.como(:'A2', $$select count(*) from public.perfis where id <> auth.uid()$$), '^ok:0$');
@@ -47,8 +47,9 @@ select t.chk('escalada: o dono da loja não edita a loja B', t.faz(:'A1', $$upda
 select t.chk('escalada: o dono da loja não prolonga a própria assinatura', t.faz(:'A1', $$update public.lojas set valido_ate = '2099-01-01', estado = 'ativa' where id = '11111111-1111-1111-1111-111111111111'$$) || ':' || (select valido_ate::text from public.lojas where id = '11111111-1111-1111-1111-111111111111'), ':(?!2099)');
 -- permissões por papel
 select t.chk('papel: o caixa não dá desconto', t.faz(:'A2', $$select public.registar_venda('[{"produto_id":"f0000000-0000-0000-0000-00000000000a","qtd":1}]'::jsonb,'Numerário',null,5)$$), 'ERRO');
-select t.chk('papel: o caixa não anula vendas', t.faz(:'A2', $$select public.anular_venda((select id from public.vendas where loja_id = '11111111-1111-1111-1111-111111111111' limit 1), 'x')$$), 'ERRO');
-select t.chk('papel: o gerente anula vendas da sua loja', t.faz(:'A3', $$select public.anular_venda((select id from public.vendas where loja_id = '11111111-1111-1111-1111-111111111111' and not anulada limit 1), 'engano')$$), '^ok$');
+select id as vid from public.vendas where loja_id = '11111111-1111-1111-1111-111111111111' and not anulada limit 1 \gset
+select t.chk('papel: o caixa não anula vendas', t.faz(:'A2', format($$select public.anular_venda(%L, 'x')$$, :'vid')), 'ERRO');
+select t.chk('papel: o gerente anula vendas da sua loja', t.faz(:'A3', format($$select public.anular_venda(%L, 'engano')$$, :'vid')), '^ok$');
 select t.chk('papel: o caixa não remove o gerente', t.faz(:'A2', $$select public.remover_funcionario('00000000-0000-0000-0000-0000000000a3')$$), 'ERRO');
 -- nomes de outras lojas não se consultam por ID
 select t.chk('IDOR: nome_de() não revela nomes de outra loja', t.como(:'A1', $$select public.nome_de('00000000-0000-0000-0000-0000000000b1')$$), '^ok$');
