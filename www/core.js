@@ -208,8 +208,18 @@ function vErro(msg) {
   authShell(`<h2>Algo correu mal</h2><div class="msg bad">${esc(msg)}</div><button class="btn block" id="t">Tentar de novo</button><button class="link" id="s">Sair</button>`);
   $('#t').onclick = () => entrar(); $('#s').onclick = sair;
 }
+// Estado da configuração inicial, decidido SÓ pelo servidor. Falha fechada: qualquer dúvida (sem Internet, erro, resposta
+// inesperada) devolve 'desconhecido' e a opção de criar o dono do sistema NÃO é mostrada nem executada.
+async function estadoInicializacao() {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'desconhecido';
+    const { data, error } = await sb.rpc('estado_inicializacao');
+    if (error) return 'desconhecido';
+    return data === 'aberta' ? 'aberta' : data === 'fechada' ? 'fechada' : 'desconhecido';
+  } catch (e) { return 'desconhecido'; }
+}
 async function vLogin(msg) {
-  let temSuper = true; try { const { data } = await sb.rpc('existe_super'); temSuper = !!data; } catch (e) { /* offline */ }
+  const temSuper = (await estadoInicializacao()) !== 'aberta';   // true = esconder a opção (fechada ou desconhecido)
   authShell(`<h2>Entrar</h2>${msg ? `<div class="msg">${esc(msg)}</div>` : ''}
     <form id="f">${fld('E-mail', 'e', lsGet('gestmz_email') || '', 'email', 'required autocapitalize="none" autocomplete="username" inputmode="email"')}${fld('Senha', 'p', '', 'password', 'required autocomplete="current-password"')}
     <button class="btn block" id="go">Entrar</button></form>
@@ -267,7 +277,12 @@ function vConfigurarLoja(perfil, loja) {
     } catch (err) { erro(err); b.disabled = false; b.textContent = 'Guardar e entrar'; }
   };
 }
-function vSetupSuper() {
+async function vSetupSuper() {
+  // Confirma de novo no servidor ANTES de mostrar o formulário (e antes de qualquer registo).
+  if ((await estadoInicializacao()) !== 'aberta') {
+    authShell(`<h2>Configuração indisponível</h2><div class="msg">A configuração inicial não está disponível neste momento. Se for o administrador, contacte o suporte do GestMZ.</div><button class="btn block" id="v">Voltar</button>`);
+    $('#v').onclick = () => vLogin(); return;
+  }
   authShell(`<h2>Dono do sistema</h2><p class="muted">Esta conta controla todas as lojas, confirma pagamentos e define os preços. Só pode ser criada uma vez.</p>
     <form id="f">${fld('O seu nome', 'nome', '', 'text', 'required')}${fld('E-mail', 'email', '', 'email', 'required autocapitalize="none"')}${fld('Senha (mínimo 6 caracteres)', 'senha', '', 'password', 'required minlength="6"')}
     <button class="btn block" id="go">Criar conta do dono do sistema</button></form><div style="text-align:center;margin-top:8px"><button class="link" id="v">Voltar</button></div>`);
@@ -275,6 +290,7 @@ function vSetupSuper() {
   $('#f').onsubmit = async e => {
     e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)), b = $('#go'); b.disabled = true;
     try {
+      if ((await estadoInicializacao()) !== 'aberta') throw new Error('A configuração inicial não está disponível neste momento.');
       const { data, error } = await sb.auth.signUp({ email: d.email.trim(), password: d.senha });
       if (error) throw new Error(traduz(error.message));
       if (!data.session) throw new Error('Precisa de desligar "Confirm email" no Supabase (veja o LEIA-ME).');
