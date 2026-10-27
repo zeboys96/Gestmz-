@@ -11,7 +11,7 @@ VIEWS.painel = async function () {
   const hoje = ymd(), m0 = hoje.slice(0, 8) + '01', sete = new Date(); sete.setDate(sete.getDate() - 6);
   const desde = m0 < ymd(sete) ? m0 : ymd(sete);
   const [vs0, eq] = await Promise.all([
-    all(() => sb.from('vendas').select('id,num,data,usuario_id,usuario_nome,total,pagamento,itens,anulada,desconto').gte('data', diaIso(desde)).order('data', { ascending: false })),
+    lerVendas(diaIso(desde)),
     all(() => sb.from('perfis').select('id,nome,usuario,papel,foto,ativo,ultimo_acesso').eq('loja_id', S.loja.id).order('nome'))
   ]);
   S.equipa = eq; recarregarLoja().catch(() => { });
@@ -23,7 +23,7 @@ VIEWS.painel = async function () {
   const baixo = S.produtos.filter(p => ['baixo', 'sem'].includes(estado(p)));
   const exp = S.produtos.flatMap(p => p.lotes.filter(l => l.validade && diasPara(l.validade) <= 90).map(l => ({ p, l }))).sort((a, b) => a.l.validade.localeCompare(b.l.validade));
   const fiado = r2(S.clientes.reduce((s, c) => s + +c.divida, 0));
-  const valorStock = r2(S.produtos.reduce((s, p) => s + estoque(p) * +p.custo, 0));
+  const valorStock = veCustos() ? r2(S.produtos.reduce((s, p) => s + estoque(p) * +p.custo, 0)) : 0;
   const equipaHoje = S.equipa.filter(u => u.ativo).map(u => { const x = vh.filter(v => v.usuario_id === u.id); return { u, n: x.length, t: soma(x) }; }).sort((a, b) => b.t - a.t || a.u.nome.localeCompare(b.u.nome));
   const topT = Math.max(1, ...equipaHoje.map(e => e.t));
   const lider = equipaHoje[0] && equipaHoje[0].t > 0 ? equipaHoje[0] : null;
@@ -31,12 +31,12 @@ VIEWS.painel = async function () {
   <div class="grid">
     <div class="stat hi"><span>Vendas hoje</span><b>${mt(soma(vh))}</b></div>
     <div class="stat"><span>Nº de vendas hoje</span><b>${vh.length}</b></div>
-    <div class="stat ok"><span>Lucro bruto hoje</span><b>${mt(r2(vh.reduce((s, v) => s + lucroVenda(v), 0)))}</b></div>
+    ${veCustos() ? `<div class="stat ok"><span>Lucro bruto hoje</span><b>${mt(r2(vh.reduce((s, v) => s + lucroVenda(v), 0)))}</b></div>` : ''}
     <div class="stat"><span>Vendas do mês</span><b>${mt(soma(vm))}</b></div>
     <div class="stat warn"><span>Stock baixo ou esgotado</span><b>${baixo.length}</b></div>
     <div class="stat bad"><span>Lotes a expirar (90 dias)</span><b>${exp.length}</b></div>
     <div class="stat warn"><span>Fiado por receber</span><b>${mt(fiado)}</b></div>
-    <div class="stat"><span>Valor do stock (custo)</span><b>${mt(valorStock)}</b></div>
+    ${veCustos() ? `<div class="stat"><span>Valor do stock (custo)</span><b>${mt(valorStock)}</b></div>` : ''}
   </div>
   <div class="cols">
     <div class="card"><h3>Quem vendeu hoje</h3>${lider ? `<p class="muted small" style="margin-top:-6px">Melhor vendedor: <b>${esc(lider.u.nome)}</b></p>` : ''}
@@ -71,7 +71,7 @@ VIEWS.pdv = async function () {
   const q = $('#q');
   window.pdvLista = () => {
     const l = filtrarProdutos(q.value.trim()).slice(0, 40);
-    $('#lista').innerHTML = l.length ? l.map(p => { const v = vendavel(p); return `<div class="pi" ${v <= 0 ? 'style="opacity:.55"' : ''}><button class="main" type="button" data-id="${p.id}" data-c="0"><b>${esc(p.nome)}</b><small>${esc(p.categoria || '')} · stock ${v}${p.un_por_caixa ? ` (${caixasVend(p)} ${esc((p.embalagem || 'caixa').toLowerCase())}(s) fechada(s) + ${v - caixasVend(p) * p.un_por_caixa} solta(s))` : ''}${p.controlado ? ' · exige receita' : ''}</small></button><span class="px">${mt(p.preco)}</span>${p.un_por_caixa && p.preco_caixa ? `<button class="btn ghost sm" type="button" data-id="${p.id}" data-c="1" title="Vender a embalagem fechada">${esc(p.embalagem || 'Caixa')} ${p.un_por_caixa} un · ${mt(p.preco_caixa)}</button>` : ''}</div>`; }).join('') : `<div class="empty">Nenhum produto encontrado.${gestor ? '<br>Registe-o em “Produtos”.' : '<br>Peça ao gerente para o registar.'}</div>`;
+    $('#lista').innerHTML = l.length ? l.map(p => { const v = vendavel(p), vs_ = veStock(); return `<div class="pi" ${vs_ && v <= 0 ? 'style="opacity:.55"' : ''}><button class="main" type="button" data-id="${p.id}" data-c="0"><b>${esc(p.nome)}</b><small>${esc(p.categoria || '')}${vs_ ? ` · stock ${v}${p.un_por_caixa ? ` (${caixasVend(p)} ${esc((p.embalagem || 'caixa').toLowerCase())}(s) fechada(s) + ${v - caixasVend(p) * p.un_por_caixa} solta(s))` : ''}` : ''}${p.controlado ? ' · exige receita' : ''}</small></button><span class="px">${mt(p.preco)}</span>${p.un_por_caixa && p.preco_caixa ? `<button class="btn ghost sm" type="button" data-id="${p.id}" data-c="1" title="Vender a embalagem fechada">${esc(p.embalagem || 'Caixa')} ${p.un_por_caixa} un · ${mt(p.preco_caixa)}</button>` : ''}</div>`; }).join('') : `<div class="empty">Nenhum produto encontrado.${gestor ? '<br>Registe-o em “Produtos”.' : '<br>Peça ao gerente para o registar.'}</div>`;
   };
   $('#lista').onclick = e => { const b = e.target.closest('button[data-id]'); if (b) { pdvAdd(b.dataset.id, b.dataset.c === '1'); if (innerWidth > 900) q.focus(); } };
   q.oninput = pdvLista;
@@ -170,7 +170,7 @@ VIEWS.vendas = async function () {
   let dia = ymd();
   $('#main').innerHTML = `<div class="bar"><h2>Vendas</h2><input class="in" type="date" id="d" value="${dia}" style="width:auto" aria-label="Dia"></div><div class="card" id="c"></div>`;
   const draw = async () => {
-    const l = await all(() => sb.from('vendas').select('*').gte('data', diaIso(dia)).lt('data', diaIso(dia, 1)).order('data', { ascending: false }));
+    const l = await lerVendas(diaIso(dia), diaIso(dia, 1));
     window._vs = l;
     const ok = l.filter(v => !v.anulada), pg = {}; ok.forEach(v => pg[v.pagamento] = (pg[v.pagamento] || 0) + +v.total);
     $('#c').innerHTML = l.length ? `<div class="tw"><table><tr><th>Nº</th><th>Hora</th><th>Vendedor</th><th>Pagamento</th><th class="n">Total</th><th></th></tr>${l.map(v => `<tr class="${v.anulada ? 'off' : ''}"><td>${nvenda(v)}</td><td>${fh(v.data)}</td><td>${esc(v.usuario_nome)}</td><td>${esc(v.pagamento)}</td><td class="n">${mt(v.total)}</td><td class="act"><button class="btn ghost sm" data-id="${v.id}">Ver</button></td></tr>`).join('')}</table></div>
@@ -186,14 +186,15 @@ let pf = { q: '', f: 'todos', c: '' };
 VIEWS.produtos = async function () {
   const adm = isGestor(), a = assin();
   $('#main').innerHTML = `<div class="bar"><h2>Produtos</h2><div class="act">${adm ? `<button class="btn ghost" id="ent">Entrada de stock</button><button class="btn ghost" id="cats">Categorias</button><button class="btn" id="novo" ${a.ok ? '' : 'disabled'}>+ Novo produto</button>` : ''}</div></div>${aviso(a)}
-  <div class="card"><div class="row"><input class="in" id="q" placeholder="Procurar por nome, código ou categoria…" value="${esc(pf.q)}" aria-label="Procurar"><select class="in" id="c" aria-label="Categoria"><option value="">Todas as categorias</option>${opts(S.cats.map(c => c.nome), pf.c)}</select><select class="in" id="f" aria-label="Estado">${opts([['todos', 'Todos'], ['baixo', 'Stock baixo'], ['sem', 'Sem stock'], ['expira', 'A expirar ou expirados']], pf.f)}</select></div><div id="tb"></div></div>`;
+  <div class="card"><div class="row"><input class="in" id="q" placeholder="Procurar por nome, código ou categoria…" value="${esc(pf.q)}" aria-label="Procurar"><select class="in" id="c" aria-label="Categoria"><option value="">Todas as categorias</option>${opts(S.cats.map(c => c.nome), pf.c)}</select>${veStock() ? `<select class="in" id="f" aria-label="Estado">${opts([['todos', 'Todos'], ['baixo', 'Stock baixo'], ['sem', 'Sem stock'], ['expira', 'A expirar ou expirados']], pf.f)}</select>` : ''}</div><div id="tb"></div></div>`;
   const draw = () => {
     const t = pf.q.toLowerCase();
     const l = S.produtos.filter(p => (!t || p.nome.toLowerCase().includes(t) || (p.codigo || '').includes(t) || (p.codigo_caixa || '').includes(t) || (p.categoria || '').toLowerCase().includes(t)) && (!pf.c || p.categoria === pf.c) &&
       (pf.f === 'todos' || (pf.f === 'baixo' && estoque(p) > 0 && estoque(p) <= p.minimo) || (pf.f === 'sem' && estoque(p) <= 0) || (pf.f === 'expira' && p.lotes.some(x => x.validade && diasPara(x.validade) <= 90))));
-    $('#tb').innerHTML = l.length ? `<div class="tw"><table><tr><th>Produto</th><th>Categoria</th><th class="n">Stock</th><th class="n">Preço</th><th>Validade</th><th>Estado</th><th></th></tr>${l.map(p => { const s = estado(p), e = estoque(p); return `<tr><td><b>${esc(p.nome)}</b>${p.controlado ? ' <span class="tag baixo">receita</span>' : ''}<br><span class="muted small">${esc(p.codigo || 'sem código')}${p.un_por_caixa ? ' · caixa ' + esc(p.codigo_caixa || '—') + ' (' + p.un_por_caixa + ' un)' : ''}</span></td><td>${esc(p.categoria || '—')}</td><td class="n">${e}${p.un_por_caixa ? `<br><span class="muted small">${caixasP(p)} ${esc((p.embalagem || 'caixa').toLowerCase())}(s) fechada(s)<br>${soltasP(p)} solta(s)</span>` : ''}</td><td class="n">${mt(p.preco)}${p.preco_caixa ? `<br><span class="muted small">caixa ${mt(p.preco_caixa)}</span>` : ''}</td><td>${fd(proxVal(p))}</td><td><span class="tag ${s}">${ESTADO_TXT[s]}</span></td><td class="act">${adm ? `<button class="btn ghost sm" data-a="in" data-id="${p.id}">+ Stock</button><button class="btn ghost sm" data-a="out" data-id="${p.id}">Baixa</button><button class="btn ghost sm" data-a="et" data-id="${p.id}">Etiquetas</button><button class="btn ghost sm" data-a="ed" data-id="${p.id}">Editar</button><button class="btn ghost sm" data-a="del" data-id="${p.id}" aria-label="Apagar">Apagar</button>` : ''}</td></tr>`; }).join('')}</table></div>` : `<div class="empty">Nenhum produto. ${adm ? 'Toque em “+ Novo produto” para começar.' : ''}</div>`;
+    $('#tb').innerHTML = l.length ? `<div class="tw"><table><tr><th>Produto</th><th>Categoria</th>${veStock() ? '<th class="n">Stock</th>' : ''}<th class="n">Preço</th>${veStock() ? '<th>Validade</th><th>Estado</th>' : ''}<th></th></tr>${l.map(p => { const s = estado(p), e = estoque(p), vs_ = veStock(); return `<tr><td><b>${esc(p.nome)}</b>${p.controlado ? ' <span class="tag baixo">receita</span>' : ''}<br><span class="muted small">${esc(p.codigo || 'sem código')}${p.un_por_caixa ? ' · caixa ' + esc(p.codigo_caixa || '—') + ' (' + p.un_por_caixa + ' un)' : ''}</span></td><td>${esc(p.categoria || '—')}</td>${vs_ ? `<td class="n">${e}${p.un_por_caixa ? `<br><span class="muted small">${caixasP(p)} ${esc((p.embalagem || 'caixa').toLowerCase())}(s) fechada(s)<br>${soltasP(p)} solta(s)</span>` : ''}</td>` : ''}<td class="n">${mt(p.preco)}${p.preco_caixa ? `<br><span class="muted small">caixa ${mt(p.preco_caixa)}</span>` : ''}</td>${vs_ ? `<td>${fd(proxVal(p))}</td><td><span class="tag ${s}">${ESTADO_TXT[s]}</span></td>` : ''}<td class="act">${adm ? `<button class="btn ghost sm" data-a="in" data-id="${p.id}">+ Stock</button><button class="btn ghost sm" data-a="out" data-id="${p.id}">Baixa</button><button class="btn ghost sm" data-a="et" data-id="${p.id}">Etiquetas</button><button class="btn ghost sm" data-a="ed" data-id="${p.id}">Editar</button><button class="btn ghost sm" data-a="del" data-id="${p.id}" aria-label="Apagar">Apagar</button>` : ''}</td></tr>`; }).join('')}</table></div>` : `<div class="empty">Nenhum produto. ${adm ? 'Toque em “+ Novo produto” para começar.' : ''}</div>`;
   };
-  $('#q').oninput = e => { pf.q = e.target.value; draw(); }; $('#c').onchange = e => { pf.c = e.target.value; draw(); }; $('#f').onchange = e => { pf.f = e.target.value; draw(); };
+  if (!veStock()) pf.f = 'todos';
+  $('#q').oninput = e => { pf.q = e.target.value; draw(); }; $('#c').onchange = e => { pf.c = e.target.value; draw(); }; if ($('#f')) $('#f').onchange = e => { pf.f = e.target.value; draw(); };
   if (adm) {
     $('#novo').onclick = () => formProduto(); $('#cats').onclick = gerirCategorias; $('#ent').onclick = escolherEntrada;
     $('#tb').onclick = e => {
@@ -276,8 +277,8 @@ function formProduto(p) {
     <label>Código de barras da unidade<div class="row" style="gap:8px;flex-wrap:nowrap"><input class="in" name="codigo" inputmode="numeric" value="${esc(p.codigo || '')}" autocomplete="off" placeholder="Passe o leitor aqui (opcional)"><button type="button" class="btn ghost sm" data-gen="codigo" style="flex:none">Gerar interno</button></div><span class="hint">Se o produto não tem código, gere um código interno e cole-o numa etiqueta.</span></label>
   </section>
   <section class="fsec"><h4>3. Preços (MT)</h4>
-    <div class="row"><label id="lCusto">Custo de aquisição por unidade (MT)<input class="in" name="custo" inputmode="decimal" value="${esc(emb0 ? '' : p.custo)}" placeholder="0,00" autocomplete="off"></label>
-    <label id="lCustoCx" ${emb0 ? '' : 'hidden'}><span id="tCustoCx">Custo da embalagem (MT)</span><input class="in" name="custo_caixa" inputmode="decimal" value="${esc(custoCx0)}" placeholder="Ex.: 400" autocomplete="off"></label></div>
+    ${veCustos() ? `<div class="row"><label id="lCusto">Custo de aquisição por unidade (MT)<input class="in" name="custo" inputmode="decimal" value="${esc(emb0 ? '' : p.custo)}" placeholder="0,00" autocomplete="off"></label>
+    <label id="lCustoCx" ${emb0 ? '' : 'hidden'}><span id="tCustoCx">Custo da embalagem (MT)</span><input class="in" name="custo_caixa" inputmode="decimal" value="${esc(custoCx0)}" placeholder="Ex.: 400" autocomplete="off"></label></div>` : ''}
     <div class="row"><label id="lPrecoCx" ${emb0 ? '' : 'hidden'}>Preço de venda da embalagem (MT)<input class="in" name="preco_caixa" inputmode="decimal" value="${esc(p.preco_caixa || '')}" placeholder="Ex.: 500" autocomplete="off"></label>
     <label>Preço de venda por unidade (MT) *<input class="in" name="preco" inputmode="decimal" value="${esc(p.preco)}" placeholder="Ex.: 30" autocomplete="off"></label></div>
     <div id="calc" class="calc" aria-live="polite"></div>
@@ -313,12 +314,13 @@ function formProduto(p) {
       const o = { nome: T('nome'), descricao: T('descricao') || null, categoria_id: catAtual.id, categoria: catAtual.nome, unidade: T('unidade'), custo: cu, preco: pu, minimo: parseInt(T('minimo')) || 0, iva: parseInt(T('iva')) || 0,
         controlado: g('controlado') ? g('controlado').checked : !!p.controlado, codigo: T('codigo') || null,
         codigo_caixa: emb ? (T('codigo_caixa') || null) : null, un_por_caixa: emb ? un : null, preco_caixa: emb ? pc : null, custo_caixa: emb && cc ? cc : null, embalagem: emb ? T('embalagem') : null };
+      if (!veCustos()) { delete o.custo; delete o.custo_caixa; }   // só o dono define custos (o servidor também o garante)
       if (!novo) o.ativo = g('ativo') ? g('ativo').checked : true;
       try {
         if (novo) {
           const r = await q(sb.from('produtos').insert({ ...o, loja_id: S.loja.id }).select());
           const total = qe * (emb ? un : 0) + qu;
-          if (total > 0) await q(sb.rpc('entrada_stock', { p_produto: r[0].id, p_qtd: total, p_lote: T('lote') || null, p_validade: T('validade') || null, p_custo: cu, p_nota: 'Stock inicial', p_soltas: emb ? qu : total }));
+          if (total > 0) await q(sb.rpc('entrada_stock', { p_produto: r[0].id, p_qtd: total, p_lote: T('lote') || null, p_validade: T('validade') || null, p_custo: veCustos() ? cu : 0, p_nota: 'Stock inicial', p_soltas: emb ? qu : total }));
         } else await q(sb.from('produtos').update(o).eq('id', p.id));
       } catch (e) { const m = String(e.message || ''); if (/código de barras já está/i.test(m)) { fe(g(T('codigo') && /«/.test(m) ? 'codigo' : 'codigo_caixa'), m); toast(m, true); return false; } throw e; }
       await recarregarProdutos(); go('produtos', true); toast('Produto guardado.');
@@ -328,7 +330,7 @@ function formProduto(p) {
   const emb = () => f.elements.modo.value === 'emb';
   const calcular = () => {
     const e = emb(), un = parseInt(T('un_por_caixa')), pu = num(T('preco')), pc = num(T('preco_caixa')), cc = num(T('custo_caixa')), nome = T('embalagem') || 'embalagem', L = [];
-    $('#tCustoCx', f).textContent = `Custo de aquisição da ${nome.toLowerCase()} (MT)`;
+    if ($('#tCustoCx', f)) $('#tCustoCx', f).textContent = `Custo de aquisição da ${nome.toLowerCase()} (MT)`;
     $('#tQe', f) && ($('#tQe', f).textContent = nome + 's fechadas'); $('#tQu', f) && ($('#tQu', f).textContent = e ? 'Unidades soltas' : 'Quantidade em unidades');
     const marg = (v, c) => v > 0 && c > 0 ? ` · margem ${Math.round((v - c) / v * 100)}%` : '';
     if (e && un >= 2) {
@@ -344,7 +346,7 @@ function formProduto(p) {
     const st = $('#stk', f); if (st) { const total = (parseInt(T('qtd_emb')) || 0) * (e && un >= 2 ? un : 0) + (parseInt(T('qtd_un')) || 0); st.innerHTML = `Stock inicial total: <b>${total} unidade(s)</b>${e && un >= 2 && (parseInt(T('qtd_emb')) || 0) ? ` <span class="muted">(${parseInt(T('qtd_emb'))} × ${un}${parseInt(T('qtd_un')) ? ' + ' + parseInt(T('qtd_un')) : ''})</span>` : ''}`; }
   };
   const modo = () => {
-    const e = emb(); $('#bEmb', f).hidden = !e; $('#lCustoCx', f).hidden = !e; $('#lPrecoCx', f).hidden = !e; $('#lCusto', f).hidden = e; const qe = $('#lQe', f); if (qe) qe.hidden = !e;
+    const e = emb(), h = (id, v) => { const x = $(id, f); if (x) x.hidden = v; }; h('#bEmb', !e); h('#lCustoCx', !e); h('#lPrecoCx', !e); h('#lCusto', e); const qe = $('#lQe', f); if (qe) qe.hidden = !e;
     $$('.seg label', f).forEach(l => l.classList.toggle('on', $('input', l).checked)); calcular();
   };
   f.addEventListener('input', calcular); f.addEventListener('change', e => { if (e.target.name === 'modo') modo(); });
@@ -386,11 +388,11 @@ function formEntrada(p, caixas) {
   modal('Entrada de stock — ' + esc(p.nome), `${p.un_por_caixa ? `<p class="small muted">1 caixa = ${p.un_por_caixa} unidades.</p>` : ''}
     <div class="row">${fld('Quantidade recebida', 'qtd', '', 'text', 'inputmode="numeric" required')}<label>Contada em<select class="in" name="em"><option value="un" ${caixas ? '' : 'selected'}>unidades</option>${p.un_por_caixa ? `<option value="cx" ${caixas ? 'selected' : ''}>caixas</option>` : ''}</select></label></div>
     <div class="row">${fld('Lote', 'lote', '')}${fld('Validade', 'validade', '', 'date')}</div>
-    <div class="row">${fld('Custo por unidade (MT)', 'custo', p.custo, 'text', 'inputmode="decimal"')}${fld('Nota (fornecedor, factura…)', 'nota', '')}</div>`, {
+    <div class="row">${veCustos() ? fld('Custo por unidade (MT)', 'custo', p.custo, 'text', 'inputmode="decimal"') : ''}${fld('Nota (fornecedor, factura…)', 'nota', '')}</div>`, {
     okText: 'Dar entrada',
     onOk: async d => {
       const n = parseInt(d.qtd) * (d.em === 'cx' ? p.un_por_caixa : 1); if (!(n > 0)) throw new Error('Quantidade inválida.');
-      await q(sb.rpc('entrada_stock', { p_produto: p.id, p_qtd: n, p_lote: d.lote || null, p_validade: d.validade || null, p_custo: num(d.custo), p_nota: d.nota || 'Entrada', p_soltas: d.em === 'cx' ? 0 : n }));
+      await q(sb.rpc('entrada_stock', { p_produto: p.id, p_qtd: n, p_lote: d.lote || null, p_validade: d.validade || null, p_custo: veCustos() ? num(d.custo) : 0, p_nota: d.nota || 'Entrada', p_soltas: d.em === 'cx' ? 0 : n }));
       await recarregarProdutos(); toast(`Entraram ${n} unidades de ${p.nome}.`); if (cur === 'produtos') go('produtos', true);
     }
   });

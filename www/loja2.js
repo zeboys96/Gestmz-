@@ -53,7 +53,7 @@ VIEWS.relatorios = async function () {
   let vs = [];
   const draw = async () => {
     const [v0, ds] = await Promise.all([
-      all(() => sb.from('vendas').select('*').gte('data', diaIso(a)).lt('data', diaIso(b, 1)).order('data', { ascending: false })),
+      lerVendas(diaIso(a), diaIso(b, 1)),
       all(() => sb.from('despesas').select('valor').gte('data', a).lte('data', b))
     ]);
     vs = v0.filter(v => !v.anulada);
@@ -61,7 +61,7 @@ VIEWS.relatorios = async function () {
     const pg = {}, vd = {}, tp = {};
     vs.forEach(v => { pg[v.pagamento] = (pg[v.pagamento] || 0) + +v.total; const x = vd[v.usuario_nome] = vd[v.usuario_nome] || { n: 0, t: 0 }; x.n++; x.t += +v.total; v.itens.forEach(i => { const t = tp[i.nome] = tp[i.nome] || { q: 0, v: 0 }; t.q += i.un; t.v += i.total; }); });
     const top = Object.entries(tp).sort((x, y) => y[1].v - x[1].v).slice(0, 10), vend = Object.entries(vd).sort((x, y) => y[1].t - x[1].t);
-    $('#r').innerHTML = `<div class="grid"><div class="stat hi"><span>Vendas</span><b>${mt(tot)}</b></div><div class="stat"><span>Nº de vendas</span><b>${vs.length}</b></div><div class="stat ok"><span>Lucro bruto</span><b>${mt(luc)}</b></div><div class="stat warn"><span>Despesas</span><b>${mt(desp)}</b></div><div class="stat ${luc - desp >= 0 ? 'ok' : 'bad'}"><span>Resultado (lucro − despesas)</span><b>${mt(luc - desp)}</b></div><div class="stat"><span>IVA incluído</span><b>${mt(iva)}</b></div></div>
+    $('#r').innerHTML = `<div class="grid"><div class="stat hi"><span>Vendas</span><b>${mt(tot)}</b></div><div class="stat"><span>Nº de vendas</span><b>${vs.length}</b></div>${veCustos() ? `<div class="stat ok"><span>Lucro bruto</span><b>${mt(luc)}</b></div>` : ''}<div class="stat warn"><span>Despesas</span><b>${mt(desp)}</b></div>${veCustos() ? `<div class="stat ${luc - desp >= 0 ? 'ok' : 'bad'}"><span>Resultado (lucro − despesas)</span><b>${mt(luc - desp)}</b></div>` : ''}<div class="stat"><span>IVA incluído</span><b>${mt(iva)}</b></div></div>
     <div class="cols"><div class="card"><h3>Por forma de pagamento</h3>${Object.keys(pg).length ? `<table>${Object.entries(pg).map(([k, x]) => `<tr><td>${esc(k)}</td><td class="n">${mt(x)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem dados</div>'}</div>
     <div class="card"><h3>Por vendedor</h3>${vend.length ? `<table>${vend.map(([k, x]) => `<tr><td>${esc(k)}</td><td class="n">${x.n} venda(s)</td><td class="n">${mt(x.t)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem dados</div>'}</div>
     <div class="card"><h3>10 produtos mais vendidos</h3>${top.length ? `<table>${top.map(([k, x]) => `<tr><td>${esc(k)}</td><td class="n">${x.q} un.</td><td class="n">${mt(x.v)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem dados</div>'}</div></div>

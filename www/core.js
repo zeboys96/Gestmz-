@@ -329,7 +329,7 @@ async function entrar() {
       if (!lb) return vSemAcesso();
       return vPin(perfil, lb);
     }
-    const lj = (await q(sb.from('lojas').select('*').eq('id', perfil.loja_id)))[0];
+    const lj = await lerLojaInfo(perfil.loja_id);
     if (!lj) return vSemAcesso();
     if (perfil.papel === 'dono' && lj.configurada === false) return vConfigurarLoja(perfil, lj);
     await carregarLoja(); S.offline = false; shell(navLoja()); iniciarRT(); go(perfil.papel === 'caixa' ? 'pdv' : 'painel'); primeiraAjuda(); sincronizarFila(); netUpdate();
@@ -362,45 +362,76 @@ async function go(v, silencioso) {
 function badge(v, n) { const b = $(`#nav button[data-v="${v}"] .badge`); if (b) { b.hidden = !n; b.textContent = n; } }
 
 /* ---------- dados da loja ---------- */
+/* Permissões por papel. A interface só mostra o que o papel pode ver; quem garante é o servidor (migração 12).
+   caixa: sem stock/lotes/custos/plano · gerente: sem custos/lucro/plano · dono: tudo da sua loja. */
+const veStock = () => !!S.perfil && S.perfil.papel !== 'caixa';
+const veCustos = () => !!S.perfil && S.perfil.papel === 'dono';
+const vePlano = () => !!S.perfil && S.perfil.papel === 'dono';
+const SEM_LIMITE = 1e9;   // o caixa não sabe o stock: o servidor decide e recusa se não houver
+const semFuncao = e => /Could not find the function|schema cache/i.test(String((e && e.message) || e || ''));
+/* Lê uma lista pela função do servidor; se a função ainda não existe (migração por aplicar), usa a leitura direta antiga. */
+async function lerLista(fn, args, alt, ordem) {
+  try { return await all(() => { const b = sb.rpc(fn, args); return ordem ? b.order(ordem[0], ordem[1]) : b; }); }
+  catch (e) { if (!semFuncao(e)) throw e; return await all(alt); }
+}
+const lerProdutos = () => lerLista('produtos_loja', { p_so_ativos: true }, () => sb.from('produtos').select('*').eq('ativo', true).order('nome'), ['nome', { ascending: true }]);
+const lerLotes = async () => veStock() ? lerLista('lotes_loja', {}, () => sb.from('lotes').select('*').gt('qtd', 0)) : [];
+const lerVendas = (desde, ate) => lerLista('vendas_loja', { p_desde: desde || null, p_ate: ate || null },
+  () => { let b = sb.from('vendas').select('*'); if (desde) b = b.gte('data', desde); if (ate) b = b.lt('data', ate); return b.order('data', { ascending: false }); }, ['data', { ascending: false }]);
+async function lerLojaInfo(id) {
+  const { data, error } = await sb.rpc('minha_loja_info');
+  if (error) { if (semFuncao(error)) return (await q(sb.from('lojas').select('*').eq('id', id)))[0]; throw new Error(traduz(error.message)); }
+  return data;
+}
 async function carregarLoja() {
   const id = S.perfil.loja_id;
   const [lj, pl, cats, prods, lotes, cli, eq] = await Promise.all([
-    q(sb.from('lojas').select('*').eq('id', id)), q(sb.from('plataforma').select('*')),
+    lerLojaInfo(id), vePlano() ? q(sb.from('plataforma').select('*')) : Promise.resolve([]),
     all(() => sb.from('categorias').select('*').order('nome')),
-    all(() => sb.from('produtos').select('*').eq('ativo', true).order('nome')),
-    all(() => sb.from('lotes').select('*').gt('qtd', 0)),
+    lerProdutos(), lerLotes(),
     all(() => sb.from('clientes').select('*').order('nome')),
     all(() => sb.from('perfis').select('id,nome,usuario,papel,foto,ativo,ultimo_acesso').eq('loja_id', id).order('nome'))
   ]);
-  S.loja = lj[0]; S.plat = pl[0]; S.cats = cats; S.clientes = cli; S.equipa = eq;
+  S.loja = lj; S.plat = pl[0] || null; S.cats = cats; S.clientes = cli; S.equipa = eq;
   S.produtos = juntar(prods, lotes); guardarCache();
 }
 const juntar = (prods, lotes) => prods.map(p => ({ ...p, lotes: lotes.filter(l => l.produto_id === p.id) }));
 async function recarregarProdutos() {
-  const [prods, lotes] = await Promise.all([all(() => sb.from('produtos').select('*').eq('ativo', true).order('nome')), all(() => sb.from('lotes').select('*').gt('qtd', 0))]);
+  const [prods, lotes] = await Promise.all([lerProdutos(), lerLotes()]);
   S.produtos = juntar(prods, lotes); guardarCache();
 }
-async function recarregarLoja() { const r = await q(sb.from('lojas').select('*').eq('id', S.perfil.loja_id)); S.loja = r[0]; banner(); }
+async function recarregarLoja() { S.loja = await lerLojaInfo(S.perfil.loja_id); banner(); }
 const prodById = id => S.produtos.find(p => p.id === id);
-const estoque = p => p.lotes.reduce((a, l) => a + l.qtd, 0);
+const estoque = p => veStock() ? p.lotes.reduce((a, l) => a + l.qtd, 0) : SEM_LIMITE;
 /* stock por caixas fechadas e unidades soltas (lotes.soltas = unidades soltas; o resto está em caixas fechadas) */
 const soltasDe = (p, l) => p.un_por_caixa ? Math.min(l.qtd, l.soltas == null ? l.qtd % p.un_por_caixa : l.soltas) : l.qtd;
 const naValidade = l => !l.validade || diasPara(l.validade) >= 0;
 const soltasP = p => p.lotes.reduce((a, l) => a + soltasDe(p, l), 0);
 const caixasP = p => p.un_por_caixa ? p.lotes.reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
-const caixasVend = p => p.un_por_caixa ? p.lotes.filter(naValidade).reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
+const caixasVend = p => !veStock() ? SEM_LIMITE : p.un_por_caixa ? p.lotes.filter(naValidade).reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
 const stockTxt = p => p.un_por_caixa ? `${caixasP(p)} ${(p.embalagem || 'caixa').toLowerCase()}(s) fechada(s) + ${soltasP(p)} solta(s)` : '';
-const vendavel = p => p.lotes.filter(l => !l.validade || diasPara(l.validade) >= 0).reduce((a, l) => a + l.qtd, 0);
+const vendavel = p => !veStock() ? SEM_LIMITE : p.lotes.filter(l => !l.validade || diasPara(l.validade) >= 0).reduce((a, l) => a + l.qtd, 0);
 const proxVal = p => { const ls = p.lotes.filter(l => l.validade).sort((a, b) => a.validade.localeCompare(b.validade)); return ls[0] ? ls[0].validade : ''; };
 function estado(p) {
+  if (!veStock()) return 'ok';
   const ls = p.lotes.filter(l => l.validade);
   if (ls.some(l => diasPara(l.validade) < 0)) return 'expirado';
   if (ls.some(l => diasPara(l.validade) <= 90)) return 'expira';
   const e = estoque(p); if (e <= 0) return 'sem'; if (e <= p.minimo) return 'baixo'; return 'ok';
 }
 const ESTADO_TXT = { ok: 'Em ordem', baixo: 'Stock baixo', expira: 'A expirar', expirado: 'Expirado', sem: 'Sem stock' };
+const MSG_INDISPONIVEL = 'A loja está temporariamente indisponível para vendas. Fale com o dono da loja.';
 function assin() {
-  const l = S.loja, d = diasPara(l.valido_ate);
+  const a = assinInterna();
+  // gerente e caixa só sabem se a loja pode operar; nunca o plano, o período de teste, a validade nem o estado de pagamento
+  if (!vePlano()) return { k: a.ok ? 'ativa' : 'indisponivel', ok: a.ok, d: 0, txt: a.ok ? '' : MSG_INDISPONIVEL };
+  return a;
+}
+function assinInterna() {
+  const l = S.loja;
+  if (l.operacional === false && l.valido_ate === undefined) return { k: 'indisponivel', ok: false, d: 0, txt: MSG_INDISPONIVEL };   // servidor novo: sem datas para não-donos
+  if (l.valido_ate === undefined) return { k: 'ativa', ok: true, d: 999, txt: '' };
+  const d = diasPara(l.valido_ate);
   if (l.estado === 'suspensa') return { k: 'suspensa', ok: false, d, txt: 'Conta suspensa. Contacte o suporte do GestMZ.' };
   if (d < 0) return { k: 'expirada', ok: false, d, txt: 'A subscrição expirou. Só é possível consultar dados até renovar.' };
   if (l.estado === 'teste') return { k: 'teste', ok: true, d, txt: `Teste grátis: ${d === 0 ? 'termina hoje' : d === 1 ? 'falta 1 dia' : 'faltam ' + d + ' dias'}.` };
@@ -410,7 +441,7 @@ function banner() {
   const el = $('#banner'); if (!el || !S.loja) return;
   const a = assin();
   if (!a.txt) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="banner ${a.ok ? '' : 'bad'}"><span>${esc(a.txt)}</span>${S.perfil.papel === 'dono' ? '<button class="btn sun" id="renovar">Renovar assinatura</button>' : '<span class="small">Peça ao dono da loja para renovar.</span>'}</div>`;
+  el.innerHTML = `<div class="banner ${a.ok ? '' : 'bad'}"><span>${esc(a.txt)}</span>${vePlano() ? '<button class="btn sun" id="renovar">Renovar assinatura</button>' : ''}</div>`;
   const r = $('#renovar'); if (r) r.onclick = () => go('assinatura');
 }
 
@@ -426,13 +457,13 @@ function iniciarRT() {
   const stock = deb(async () => { try { await recarregarProdutos(); if (cur === 'pdv' && window.pdvLista) pdvLista(); else if (cur === 'produtos' || cur === 'painel') go(cur, true); } catch (e) { /* ok */ } });
   const vend = deb(() => { if (cur === 'painel' || cur === 'vendas') go(cur, true); });
   try {
-    const ch = sb.channel('loja-' + id)
+    // canais separados: se um deles falhar (tabela fora da publicação, migração por aplicar), os outros continuam
+    canais.push(sb.channel('loja-' + id).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'suporte_tickets', filter: f }, () => contarSuporte(true)).subscribe());
+    canais.push(sb.channel('sinais-' + id).on('postgres_changes', { event: '*', schema: 'public', table: 'sinais_loja', filter: f }, () => { stock(); vend(); }).subscribe());   // só um contador, sem dados
+    canais.push(sb.channel('legado-' + id)   // servidor antigo (antes da migração 12): continua a avisar por tabela
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lotes', filter: f }, stock)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos', filter: f }, stock)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vendas', filter: f }, vend)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'suporte_tickets', filter: f }, () => contarSuporte(true))
-      .subscribe();
-    canais.push(ch);
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vendas', filter: f }, vend).subscribe());
   } catch (e) { /* sem tempo real: a app continua a funcionar */ }
   const batida = () => { sb.from('perfis').update({ ultimo_acesso: new Date().toISOString() }).eq('id', S.perfil.id).then(() => { }, () => { }); };
   batida(); hb = setInterval(batida, 60000);

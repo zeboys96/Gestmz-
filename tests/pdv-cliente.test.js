@@ -14,7 +14,8 @@ const FAKE = `(function(){
         if (m === 'rede') return Promise.resolve({ data: null, error: { message: 'Failed to fetch' } });
         if (m === 'erro') return Promise.resolve({ data: null, error: { message: 'Stock insuficiente: X' } });
         return Promise.resolve({ data: { id: 'v1', num: 7, data: new Date().toISOString(), usuario_nome: 'Teste', pagamento: a.p_pagamento, subtotal: 10, desconto: 0, iva: 0, total: 10, recebido: 0, troco: 0, itens: [{ nome: 'Produto', qtd: 1, preco: 10, total: 10, un: 1 }], cliente_id: a.p_cliente }, error: null }); }
-      return Promise.resolve({ data: null, error: null }); },
+      const dados = n === 'produtos_loja' ? window.__T.produtos : n === 'lotes_loja' ? window.__T.lotes : n === 'vendas_loja' ? [] : null;
+      const b = { range(){ return b; }, order(){ return b; }, then(res, rej){ return Promise.resolve(window.__falhaLeitura && dados ? { data: null, error: { message: 'Failed to fetch' } } : { data: dados, error: null }).then(res, rej); } }; return b; },
     channel: () => ({ on(){ return this; }, subscribe(){ return this; } }), removeChannel(){}, from: build };
   window.supabase = { createClient: () => sbf };
 })();`;
