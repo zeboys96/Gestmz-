@@ -39,7 +39,7 @@ As categorias iniciais dependem do tipo de loja (mais de 40 para qualquer comér
 ## Primeiros passos (uma única vez)
 
 1. **Supabase → Authentication → Sign In / Providers → Email:** desligue **Confirm email**. Sem isto as contas criadas não conseguem entrar.
-2. Abra a app e toque em **Configurar o dono do sistema**. Faça isto antes de dar o endereço a alguém: só a primeira pessoa pode criar esta conta.
+2. A criação do dono do sistema só funciona se o servidor a autorizar: no SQL Editor, depois de aplicar `supabase/migracao_10_inicializacao_segura.sql`, corra `update public.plataforma set inicializacao_aberta = true;` e depois abra a app e toque em **Configurar o dono do sistema**. A autorização desliga-se sozinha assim que a conta é criada e nunca volta a abrir enquanto existir um dono (ver `docs/SEGURANCA.md`).
 3. Em **Preços e conta**, confirme o titular, o número de recebimento e os preços (os valores iniciais são exemplos).
 4. Em **Lojas → + Novo lojista**, crie a conta de cada cliente. A app mostra a mensagem pronta (endereço, e-mail e senha) para copiar ou enviar por WhatsApp.
 

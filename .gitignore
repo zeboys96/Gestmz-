@@ -6,3 +6,11 @@ www/zxing.js
 desktop/node_modules/
 desktop/dist/
 desktop/www/
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+.env
+.env.*
+__pycache__/

@@ -99,6 +99,8 @@ jobs:
           chmod +x gradlew
           if [ "$TIPO" = "candidata" ]; then ./gradlew assembleRelease; else ./gradlew assembleDebug; fi
       - name: Conferir o APK (versão, identificador, assinatura) e nomeá-lo
+        env:
+          ESPERADA_RAW: ${{ vars.ANDROID_CERT_SHA256 }}
         run: |
           if [ "$TIPO" = "candidata" ]; then F=android/app/build/outputs/apk/release/app-release.apk; else F=android/app/build/outputs/apk/debug/app-debug.apk; fi
           BT=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)
@@ -109,7 +111,14 @@ jobs:
           CODE=$(node -p "const [a,b,c]='$VERSAO'.split('.').map(Number);a*10000+b*100+c")
           echo "$BAD" | grep -q "versionCode='$CODE'" || { echo "::error::versionCode do APK não é $CODE"; exit 1; }
           if [ "$TIPO" = "candidata" ]; then
-            "$BT"apksigner verify --print-certs "$F" | grep -E "certificate SHA-256 digest|Verified using" || { echo "::error::a assinatura não verifica"; exit 1; }
+            "$BT"apksigner verify --print-certs "$F" > "$RUNNER_TEMP/certs.txt" || { echo "::error::a assinatura não verifica"; exit 1; }
+            grep -E "certificate SHA-256 digest|Verified using" "$RUNNER_TEMP/certs.txt"
+            # Impressão digital esperada (parte PÚBLICA do certificado; guardada como variável do repositório, não como segredo).
+            # Sem ela, ou se for diferente, a candidata falha: assim nunca se publica um APK assinado com a chave errada.
+            ESPERADA=$(printf '%s' "$ESPERADA_RAW" | tr -d ': \n' | tr 'A-F' 'a-f')
+            [ -n "$ESPERADA" ] || { echo "::error title=Falta a impressão digital::Crie a variável de repositório ANDROID_CERT_SHA256 com o SHA-256 do certificado de produção (Settings → Secrets and variables → Actions → Variables)."; exit 1; }
+            OBTIDA=$(grep -m1 "certificate SHA-256 digest" "$RUNNER_TEMP/certs.txt" | sed 's/.*: *//' | tr -d ': ' | tr 'A-F' 'a-f')
+            [ "$OBTIDA" = "$ESPERADA" ] || { echo "::error::a impressão digital do certificado do APK não é a esperada"; exit 1; }
           fi
           mkdir -p saida
           N="GestMZ-$VERSAO-android$( [ "$TIPO" = "candidata" ] || echo -teste ).apk"
