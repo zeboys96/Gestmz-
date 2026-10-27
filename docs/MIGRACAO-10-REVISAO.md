@@ -22,7 +22,7 @@ Ficheiros: `supabase/migracao_10_inicializacao_segura.sql` (aplicar), `supabase/
 | `_audit_plat()`, `_plat_audit_trg()` + triggers `plat_audit_trg`, `perfis_audit_super_trg`, `lojas_audit_plat_trg` | Novas. Registam alterações a `plataforma`, a perfis `super` e ao `estado`/`valido_ate` de lojas. Revogadas a todos os papéis da API. |
 | `existe_super()`, `perfis_guard()`, `sou_super()` e as restantes | **Inalteradas** (`existe_super` fica para as apps já instaladas). |
 
-Efeito colateral a conhecer: cada alteração de `estado`/`valido_ate` numa loja (confirmar pagamento, suspender) passa a gravar uma linha em `auditoria_plataforma`; se essa gravação falhasse, a operação falharia. Testado (confirmar pagamento/alterar loja funcionam).
+Efeito colateral a conhecer: cada alteração de `estado`/`valido_ate` numa loja (confirmar pagamento, suspender) passa a gravar uma linha em `auditoria_plataforma`; se essa gravação falhasse, a operação falharia. Testado com a alteração direta de uma loja pelo dono do sistema; a função `confirmar_pagamento` não foi exercitada com sucesso nos testes (só a recusa a quem não é dono do sistema), por isso a verificação pós-aplicação com uma loja de teste é obrigatória.
 
 ## 2. Como protege o superadministrador `zeboys96@gmail.com`
 - A migração não faz `insert/update/delete` em `perfis` nem em `auth.users` (comprovado: resumo MD5 de perfis, lojas, vendas, produtos, clientes, lotes, categorias, tickets e auth.users **idêntico** antes e depois, aplicando a migração duas vezes — `tests/db/atualizacao.sh`).
@@ -54,7 +54,7 @@ Antes (obrigatório):
 2. Cópia manual do que a migração toca (só leitura; guardar o resultado fora do repositório): `select * from public.plataforma;` e `select id, papel, ativo, loja_id from public.perfis where papel='super';` e `select proname, pg_get_functiondef(oid) from pg_proc where proname in ('reivindicar_super','nome_de','existe_super','perfis_guard');` e exportar (Table Editor → Export CSV) `perfis`.
 3. Escolher um momento de pouco uso; avisar que durante ~1 minuto não se deve criar equipa.
 Recuperação:
-- Falha a meio: o ficheiro corre numa só transação do SQL Editor (se falhar, nada fica aplicado). Confirmar com as verificações abaixo.
+- Falha a meio: não garanto que o SQL Editor execute o ficheiro numa única transação. Para o garantir, colar o conteúdo entre `begin;` e `commit;` (em caso de erro, o PostgreSQL desfaz tudo). Confirmar com as verificações abaixo.
 - Se algo correr mal depois: executar `supabase/reverter_migracao_10.sql` (testado), que repõe funções, triggers e permissões; não apaga dados.
 - Se o dono ficasse inacessível (não esperado: a migração não o toca): processo de recuperação em `docs/SEGURANCA.md`.
 
