@@ -10,7 +10,7 @@ Depois do merge, `workflow_dispatch` passa a funcionar e o gatilho deixa de ser 
 
 ## Procedimento (um commit separado, antes ou logo depois do merge)
 1. Apagar as 4 linhas acima e as 2 linhas de comentário «TEMPORÁRIO…» que as antecedem.
-2. Em `tests/versoes.test.js`, o teste que verifica o gatilho temporário deve passar a verificar que **não** existe `push:` no workflow (procurar «temporário»/`desenvolvimento/atualizacoes`).
+2. Nenhum teste atual depende do gatilho (verificado). Recomenda-se acrescentar a `tests/versoes.test.js` uma verificação de que `versao.yml` já não contém `push:` nem `desenvolvimento/atualizacoes`.
 3. `node --test tests/*.test.js` e `node scripts/verificar-versoes.js`.
 4. Commit: «versao.yml: remover gatilho temporário». Como o gatilho é removido, esse commit não dispara execução.
 5. Confirmar em Actions que só aparece o disparo manual.
