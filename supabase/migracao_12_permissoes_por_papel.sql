@@ -5,7 +5,7 @@
 --
 -- Objetivos:
 --  * caixa: não consegue ler quantidades de stock, lotes, validades, mínimo, esgotados nem custos;
---  * gerente: não consegue ler custos nem lucro (custo_un nas vendas), mantém as operações de stock;
+--  * gerente: não consegue ler custos nem lucro (custo_un nas vendas) nem DESPESAS (só o dono as vê), mantém as operações de stock;
 --  * caixa e gerente: não leem plano, período de teste, validade da subscrição nem preços de subscrição;
 --  * o tempo real deixa de publicar linhas de produtos/lotes/vendas (só um sinal sem dados).
 -- ATENÇÃO (compatibilidade): apps já instaladas que fazem select('*') em produtos/lotes/vendas/lojas
@@ -99,6 +99,18 @@ grant select (id, codigo, nome, tipo, nuit, tel, endereco, criado_em, configurad
 -- preços/contas de subscrição: só o dono da loja e o dono do sistema
 drop policy if exists p_plataforma_sel on public.plataforma;
 create policy p_plataforma_sel on public.plataforma for select to authenticated using (public.sou_super() or public.meu_papel() = 'dono');
+
+-- ---------- despesas: SÓ o dono da loja (gerente e caixa não leem, não criam, não apagam) ----------
+-- Com as vendas, as despesas permitiriam ao gerente calcular um resultado/lucro; por decisão do titular, ficam reservadas ao dono.
+drop policy if exists p_despesas_sel on public.despesas;
+create policy p_despesas_sel on public.despesas for select to authenticated
+  using (loja_id = public.minha_loja() and public.meu_papel() = 'dono');
+drop policy if exists p_despesas_ins on public.despesas;
+create policy p_despesas_ins on public.despesas for insert to authenticated
+  with check (loja_id = public.minha_loja() and public.meu_papel() = 'dono' and public.loja_ativa());
+drop policy if exists p_despesas_del on public.despesas;
+create policy p_despesas_del on public.despesas for delete to authenticated
+  using (loja_id = public.minha_loja() and public.meu_papel() = 'dono');
 
 -- ---------- custos: só o dono os altera (gerente mantém as operações de stock, sem tocar nos custos) ----------
 create or replace function public.produtos_custo_so_dono() returns trigger

@@ -39,6 +39,16 @@ grant select on public.produtos, public.lotes, public.vendas, public.lojas to au
 drop policy if exists p_plataforma_sel on public.plataforma;
 create policy p_plataforma_sel on public.plataforma for select to authenticated using (true);
 
+-- despesas: políticas originais (gerente volta a poder ver/criar/apagar)
+drop policy if exists p_despesas_sel on public.despesas;
+create policy p_despesas_sel on public.despesas for select to authenticated using (loja_id = public.minha_loja() and public.gestor());
+drop policy if exists p_despesas_ins on public.despesas;
+create policy p_despesas_ins on public.despesas for insert to authenticated
+  with check (loja_id = public.minha_loja() and public.gestor() and public.loja_ativa());
+drop policy if exists p_despesas_del on public.despesas;
+create policy p_despesas_del on public.despesas for delete to authenticated
+  using (loja_id = public.minha_loja() and public.gestor());
+
 -- tempo real original
 do $$ begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then

@@ -91,3 +91,23 @@ select t.chk('sinal: o caixa lê o sinal da sua loja', t.como(:'A2', 'select cou
 select t.chk('sinal: só tem versão, sem dados de negócio', (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns where table_name = 'sinais_loja'), '^loja_id,versao,atualizado_em$');
 select t.chk('sinal: ninguém escreve em sinais_loja pela API', t.faz(:'A1', $$update public.sinais_loja set versao = 0$$), 'ERRO');
 select t.chk('tempo real: produtos/lotes/vendas fora da publicação, sinais_loja dentro', (select string_agg(tablename, ',' order by tablename) from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public'), '^sinais_loja$');
+
+-- ---------- despesas e lucros: só o dono ----------
+insert into public.despesas(loja_id, data, descricao, categoria, valor) values ('11111111-1111-1111-1111-111111111111', current_date, 'Renda', 'Renda', 500), ('22222222-2222-2222-2222-222222222222', current_date, 'Renda B', 'Renda', 700);
+select t.chk('despesas: o dono vê as da sua loja (só 1)', t.como(:'A1', 'select count(*) from public.despesas'), '^ok:1$');
+select t.chk('despesas: o dono regista uma despesa', t.faz(:'A1', $$insert into public.despesas(loja_id, data, descricao, categoria, valor) values ('11111111-1111-1111-1111-111111111111', current_date, 'Luz', 'Serviços', 50)$$), '^ok$');
+select t.chk('despesas: gerente NÃO lê (API direta)', t.como(:'A3', 'select count(*) from public.despesas'), '^ok:0$');
+select t.chk('despesas: gerente NÃO lê nem filtrando por valor/data/loja', t.como(:'A3', $$select count(*) from public.despesas where loja_id = '11111111-1111-1111-1111-111111111111' or valor > 0$$), '^ok:0$');
+select t.chk('despesas: gerente NÃO regista', t.faz(:'A3', $$insert into public.despesas(loja_id, data, descricao, categoria, valor) values ('11111111-1111-1111-1111-111111111111', current_date, 'Intruso', 'X', 1)$$), 'ERRO');
+select t.chk('despesas: gerente NÃO apaga (nada é apagado)', t.faz(:'A3', $$delete from public.despesas$$) || ':' || (select count(*)::text from public.despesas where loja_id = '11111111-1111-1111-1111-111111111111'), ':2$');
+select t.chk('despesas: gerente NÃO altera (nada muda)', t.faz(:'A3', $$update public.despesas set valor = 1$$) || ':' || (select sum(valor)::text from public.despesas where loja_id = '11111111-1111-1111-1111-111111111111'), ':550');
+select t.chk('despesas: caixa NÃO lê', t.como(:'A2', 'select count(*) from public.despesas'), '^ok:0$');
+select t.chk('despesas: caixa NÃO regista', t.faz(:'A2', $$insert into public.despesas(loja_id, data, descricao, categoria, valor) values ('11111111-1111-1111-1111-111111111111', current_date, 'Intruso', 'X', 1)$$), 'ERRO');
+select t.chk('despesas: caixa NÃO apaga', t.faz(:'A2', $$delete from public.despesas$$) || ':' || (select count(*)::text from public.despesas where loja_id = '11111111-1111-1111-1111-111111111111'), ':2$');
+select t.chk('despesas: anónimo recusado', t.como(null, 'select count(*) from public.despesas'), 'ERRO');
+select t.chk('despesas: o dono de outra loja não vê as desta', t.como(:'B1', 'select count(*) from public.despesas') , '^ok:1$');
+select t.chk('despesas: o dono da loja A não regista na loja B', t.faz(:'A1', $$insert into public.despesas(loja_id, data, descricao, categoria, valor) values ('22222222-2222-2222-2222-222222222222', current_date, 'Intruso', 'X', 1)$$), 'ERRO');
+select t.faz(:'A1', $$delete from public.despesas where descricao = 'Luz'$$) as r \gset
+select t.chk('despesas: o dono apaga uma despesa sua', :'r' || ':' || (select count(*)::text from public.despesas where loja_id = '11111111-1111-1111-1111-111111111111'), '^ok:1$');
+select t.chk('lucro: nenhuma função devolve lucro/custo ao gerente (itens, produtos, resposta da venda)', t.como(:'A3', $$select (select count(*) from public.vendas_loja() v, jsonb_array_elements(v.itens) i where i ? 'custo_un' or i ? 'lucro') + (select count(*) from public.produtos_loja() where custo is not null or custo_caixa is not null)$$), '^ok:0$');
+select t.chk('lucro: o dono continua a ver custos e lucro (custo_un)', t.como(:'A1', $$select count(*) from public.vendas_loja() v, jsonb_array_elements(v.itens) i where i ? 'custo_un'$$), '^ok:[1-9]');
