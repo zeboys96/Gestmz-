@@ -339,7 +339,7 @@ async function entrar() {
 /* ---------- estrutura ---------- */
 const NAV_LOJA = [
   ['painel', 'painel', 'Painel', 'dono,gerente'], ['pdv', 'vender', 'Vender', 'dono,gerente,caixa'], ['vendas', 'vendas', 'Vendas', 'dono,gerente,caixa'],
-  ['produtos', 'produtos', 'Produtos', 'dono,gerente,caixa'], ['clientes', 'clientes', 'Clientes', 'dono,gerente,caixa'], ['despesas', 'despesas', 'Despesas', 'dono,gerente'],
+  ['produtos', 'produtos', 'Produtos', 'dono,gerente,caixa'], ['clientes', 'clientes', 'Clientes', 'dono,gerente,caixa'], ['despesas', 'despesas', 'Despesas', 'dono'],
   ['relatorios', 'relatorios', 'Relatórios', 'dono,gerente'], ['equipa', 'equipa', 'Equipa', 'dono,gerente'], ['assinatura', 'assinatura', 'Assinatura', 'dono'],
   ['registo', 'registo', 'Registo', 'dono,gerente'], ['suporte', 'ajuda', 'Suporte', 'dono'], ['ajuda', 'ajuda', 'Ajuda', 'dono,gerente,caixa'], ['perfil', 'conta', 'Conta', 'dono,gerente,caixa'], ['sair', 'sair', 'Sair', 'dono,gerente,caixa']
 ];
@@ -365,7 +365,8 @@ function badge(v, n) { const b = $(`#nav button[data-v="${v}"] .badge`); if (b) 
 /* Permissões por papel. A interface só mostra o que o papel pode ver; quem garante é o servidor (migração 12).
    caixa: sem stock/lotes/custos/plano · gerente: sem custos/lucro/plano · dono: tudo da sua loja. */
 const veStock = () => !!S.perfil && S.perfil.papel !== 'caixa';
-const veCustos = () => !!S.perfil && S.perfil.papel === 'dono';
+const veCustos = () => !!S.perfil && S.perfil.papel === 'dono';   // custos, lucro e despesas: só o dono
+const veDespesas = veCustos;
 const vePlano = () => !!S.perfil && S.perfil.papel === 'dono';
 const SEM_LIMITE = 1e9;   // o caixa não sabe o stock: o servidor decide e recusa se não houver
 const semFuncao = e => /Could not find the function|schema cache/i.test(String((e && e.message) || e || ''));

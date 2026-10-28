@@ -51,6 +51,7 @@ test('interface por papel: caixa sem stock, gerente sem lucro/custos, plano só 
     // o caixa consegue pôr 3 unidades na venda mesmo "havendo" 2 (o servidor é que decide)
     await p.evaluate(() => { go('pdv'); }); await p.waitForSelector('#lista .pi');
     await p.evaluate(() => { pdvAdd('p1', false); pdvAdd('p1', false); pdvAdd('p1', false); }); assert.strictEqual(await p.evaluate(() => cart[0].qtd), 3, 'o cliente não limita pelo stock (decide o servidor)');
+    assert.ok(!/despesas/i.test(await p.locator('#nav').innerText()), 'menu do caixa sem despesas');
     assert.ok(!PROIBIDAS_PLANO.test(await p.locator('#nav').innerText()), 'menu do caixa sem plano/assinatura/suporte: ' + await p.locator('#nav').innerText());
     assert.strictEqual(await p.locator('#banner').innerText(), '', 'sem avisos de plano para o caixa');
     assert.deepStrictEqual(erros, []); await ctx.close();
@@ -62,8 +63,12 @@ test('interface por papel: caixa sem stock, gerente sem lucro/custos, plano só 
     ({ ctx, p, erros } = await abrir(b, url, 'gerente', LOJA_OUTROS));
     await p.evaluate(() => go('painel')); await p.waitForSelector('.grid');
     txt = await p.locator('#main').innerText(); assert.ok(!/lucro|valor do stock|custo/i.test(txt), 'painel do gerente sem lucro/custo: ' + txt); assert.ok(/stock baixo/i.test(txt), 'mantém os avisos de stock');
+    await p.evaluate(() => { window.__tabs = []; const f = sb.from.bind(sb); sb.from = t => { window.__tabs.push(t); return f(t); }; });
     await p.evaluate(() => go('relatorios')); await p.waitForSelector('#r .grid');
-    txt = await p.locator('#r').innerText(); assert.ok(!/lucro|resultado|custo/i.test(txt), 'relatórios do gerente sem lucro: ' + txt); assert.ok(/vendas/i.test(txt));
+    txt = await p.locator('#r').innerText(); assert.ok(!/lucro|resultado|custo|despesas/i.test(txt), 'relatórios do gerente sem lucro nem despesas: ' + txt);
+    assert.ok(!(await p.evaluate(() => window.__tabs)).includes('despesas'), 'o gerente nem sequer pede as despesas ao servidor');
+    assert.ok(!/despesas/i.test(await p.locator('#nav').innerText()), 'menu do gerente sem despesas');
+    await p.evaluate(() => go('despesas')); await p.waitForSelector('#main .empty'); assert.ok(!(await p.evaluate(() => window.__tabs)).includes('despesas'), 'vista de despesas bloqueada ao gerente'); assert.ok(/vendas/i.test(txt));
     await p.evaluate(() => go('produtos')); await p.waitForSelector('#tb table'); assert.ok(/stock/i.test(await p.locator('#tb').innerText()), 'o gerente continua a ver stock');
     await p.evaluate(() => formProduto()); await p.waitForSelector('.modal form');
     assert.strictEqual(await p.locator('.modal [name=custo]').count(), 0, 'formulário de produto sem custo'); assert.strictEqual(await p.locator('.modal [name=custo_caixa]').count(), 0);
@@ -74,7 +79,8 @@ test('interface por papel: caixa sem stock, gerente sem lucro/custos, plano só 
     // ---------- DONO ----------
     ({ ctx, p, erros } = await abrir(b, url, 'dono', LOJA_DONO));
     await p.evaluate(() => go('painel')); await p.waitForSelector('.grid'); txt = await p.locator('#main').innerText(); assert.ok(/lucro bruto hoje/i.test(txt) && /valor do stock/i.test(txt), 'o dono vê lucro e valor do stock');
-    await p.evaluate(() => go('relatorios')); await p.waitForSelector('#r .grid'); assert.ok(/lucro bruto/i.test(await p.locator('#r').innerText()));
+    await p.evaluate(() => go('relatorios')); await p.waitForSelector('#r .grid'); assert.ok(/lucro bruto/i.test(await p.locator('#r').innerText()) && /despesas/i.test(await p.locator('#r').innerText()), 'o dono vê lucro e despesas nos relatórios');
+    assert.ok(/despesas/i.test(await p.locator('#nav').innerText()), 'o dono vê o menu Despesas');
     await p.evaluate(() => formProduto()); await p.waitForSelector('.modal form'); assert.ok(await p.locator('.modal [name=custo]').count() === 1, 'o dono vê o custo'); await p.evaluate(() => document.querySelectorAll('.modal').forEach(m => m.remove()));
     assert.ok(/assinatura/i.test(await p.locator('#nav').innerText()), 'o dono vê a Assinatura');
     assert.deepStrictEqual(erros, []); await ctx.close();
