@@ -187,11 +187,28 @@ VIEWS.perfil = async function () {
   const p = S.perfil, dono = p.papel === 'dono';
   $('#main').innerHTML = `<div class="bar"><h2>A minha conta</h2></div>
   <form class="card" id="fp"><h3>Perfil</h3><div class="row" style="align-items:center"><div style="flex:none">${avatar(p, 'xl')}</div><div>${fotoCampo(null).replace(' hidden', ' hidden')}</div></div>${fld('Nome', 'nome', p.nome, 'text', 'required')}<p class="muted small">Função: ${PAPEL[p.papel]}${S.loja ? ' · ' + esc(S.loja.nome) : ''}</p><button class="btn">Guardar perfil</button></form>
-  <form class="card" id="fs"><h3>Mudar senha</h3>${fld('Nova senha (mínimo 6 caracteres)', 'senha', '', 'password', 'required minlength="6" autocomplete="new-password"')}<button class="btn">Mudar senha</button></form>
+  <form class="card" id="fs"><h3>Mudar senha</h3>${fld('Senha atual', 'atual', '', 'password', 'required autocomplete="current-password"')}${fld('Nova senha (mínimo 6 caracteres)', 'senha', '', 'password', 'required minlength="6" autocomplete="new-password"')}${fld('Repita a nova senha', 'conf', '', 'password', 'required minlength="6" autocomplete="new-password"')}<p class="muted small">Se não se lembra da senha atual, não use este formulário: peça a recuperação de acesso.</p><button class="btn">Mudar senha</button></form>
   ${dono ? `<form class="card" id="fl"><h3>Dados do estabelecimento</h3>${fld('Nome', 'nome', S.loja.nome, 'text', 'required')}<label>Tipo<select class="in" name="tipo">${opts(TIPOS_LOJA, S.loja.tipo)}</select></label><div class="row">${fld('NUIT', 'nuit', S.loja.nuit || '')}${fld('Telefone', 'tel', S.loja.tel || '', 'tel')}</div>${fld('Endereço', 'endereco', S.loja.endereco || '')}<p class="muted small">Estes dados aparecem no recibo.</p><button class="btn">Guardar dados</button></form>` : ''}`;
   const st = ligarFoto($('#fp'));
   $('#fp').onsubmit = async e => { e.preventDefault(); try { const o = { nome: $('[name=nome]', e.target).value.trim() }; if (st.v) o.foto = st.v; await q(sb.from('perfis').update(o).eq('id', p.id)); Object.assign(S.perfil, o); toast('Perfil guardado.'); shell(S.perfil.papel === 'super' ? navSuper() : navLoja()); go('perfil', true); } catch (er) { erro(er); } };
-  $('#fs').onsubmit = async e => { e.preventDefault(); try { const { error } = await sb.auth.updateUser({ password: $('[name=senha]', e.target).value }); if (error) throw new Error(traduz(error.message)); e.target.reset(); toast('Senha alterada.'); } catch (er) { erro(er); } };
+  $('#fs').onsubmit = async e => {
+    e.preventDefault(); const f = e.target, b = $('button', f);
+    const atual = $('[name=atual]', f).value, nova = $('[name=senha]', f).value, conf = $('[name=conf]', f).value; b.disabled = true;
+    try {
+      if (nova.length < 6) throw new Error('A nova senha deve ter pelo menos 6 caracteres.');
+      if (nova !== conf) throw new Error('As duas senhas novas não são iguais.');
+      if (nova === atual) throw new Error('A nova senha tem de ser diferente da atual.');
+      // Reautenticação: confirma a senha atual com um cliente à parte (não altera a sessão em uso). A recuperação de acesso é outro processo.
+      const { data: ses } = await sb.auth.getSession(); const email = ses && ses.session && ses.session.user && ses.session.user.email;
+      if (!email) throw new Error('Inicie sessão de novo para mudar a senha.');
+      const aux = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'gestmz-aux' } });
+      const { error: ea } = await aux.auth.signInWithPassword({ email, password: atual });
+      aux.auth.signOut().catch(() => { });
+      if (ea) throw new Error(/network|fetch|rede/i.test(ea.message || '') ? 'Sem ligação. Tente de novo com Internet.' : 'A senha atual está incorreta.');
+      const { error } = await sb.auth.updateUser({ password: nova }); if (error) throw new Error(traduz(error.message));
+      f.reset(); toast('Senha alterada.');
+    } catch (er) { erro(er); } finally { b.disabled = false; }
+  };
   const fl = $('#fl'); if (fl) fl.onsubmit = async e => { e.preventDefault(); const d = Object.fromEntries(new FormData(fl)); try { await q(sb.rpc('atualizar_loja', { p_nome: d.nome, p_tipo: d.tipo, p_nuit: d.nuit, p_tel: d.tel, p_endereco: d.endereco })); await recarregarLoja(); shell(navLoja()); go('perfil', true); toast('Dados guardados.'); } catch (er) { erro(er); } };
   if (window.GestMZAtualizacao) GestMZAtualizacao.cartaoConta($('#main'));
 };
