@@ -40,3 +40,21 @@ Proteção contra fuga por workflow: segredos do repositório ficam acessíveis 
 1. Chave criada e guardada (secção 3), variável `ANDROID_CERT_SHA256` definida.
 2. Correr `versao.yml` em `candidata` (depois do merge, ver `docs/GATILHO-TEMPORARIO.md`), descarregar o APK **assinado**, `apksigner verify --print-certs` e comparar com a impressão digital.
 3. Instalar num segundo aparelho primeiro; só depois seguir o plano da secção 2.
+
+## 6. Revisão desta fase (28/10/2026): procedimento seguro e propostas que aguardam a sua decisão
+Nada foi criado nem executado: **a chave Android continua por criar.**
+
+**Ordem segura de ponta a ponta**
+1. *(Agora, sem risco)* Nada a fazer no telefone. O APK instalado mantém-se; **não desinstale**.
+2. Decidir se quer as duas melhorias da secção «Propostas» abaixo (ambas pequenas e testáveis; só as faço com o seu «sim»).
+3. Gerar a chave (secção 3) → definir os 4 segredos + `ANDROID_CERT_SHA256`. Passo seu (irreversível na prática: perder a chave obriga todos a reinstalar). Peço autorização imediatamente antes.
+4. Após o merge autorizado, correr `versao.yml` em `candidata` → rascunho de Release com APK assinado, SHA-256 do ficheiro e verificação do certificado.
+5. Instalar o APK assinado num **segundo telemóvel** de teste. Se «App não instalada» aparecer no telefone principal, **nada se perde**: a app antiga continua intacta.
+6. Só no telefone principal, e só quando o painel de vendas pendentes mostrar **0 pendentes** e as últimas vendas aparecerem no painel web: desinstalar → instalar o APK assinado → entrar de novo. Esta passagem é única; daí em diante as atualizações são por cima e preservam tudo.
+7. Quem não tiver Internet nesse momento e tiver vendas pendentes **não faz a passagem** até sincronizar.
+
+**Propostas (não implementadas)**
+- **A. «Guardar cópia das vendas pendentes»**: botão que descarrega um ficheiro com a fila `gestmz_fila` (sem senhas nem tokens) e permite reimportá-la depois da reinstalação. Fecha a única lacuna que pode perder dinheiro na passagem. Risco: o ficheiro contém dados de vendas e clientes; ficaria só no telefone. A reimportação tem de respeitar a idempotência do servidor para não duplicar vendas — requer testes próprios.
+- **B. Prova da chave efémera**: um passo no modo `teste` que imprime o SHA-256 do certificado do APK debug. Duas execuções com valores diferentes provam que cada APK de teste tem chave diferente (hoje é dedução, não medição). Não toca em segredos.
+
+**Riscos que continuam**: certificado do APK instalado não verificado (sem acesso ao aparelho); instalação de APK assinado **nunca testada num telefone real**; ambiente `aprovacao-release` não confirmado.
