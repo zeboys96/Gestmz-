@@ -36,3 +36,10 @@ Em falta: autorizações temporárias, recuperação (A e C), facial, gestão de
 
 ## 3. Itens fora do repositório (exigem a sua autorização/ação)
 Migrações 10, 11, 12, 13, 14 (produção); Edge Function de recuperação; MFA do superadministrador; definições do Supabase Auth (senha atual, limites de login, proteção de senhas vazadas); criação da chave Android e variáveis; fornecedor facial e conta; proteção de `main`; remoção do gatilho `push:` depois do merge.
+
+## Atualização 28/10/2026 — despesas e lucro só para o dono
+- **Decisão confirmada:** só o `dono` vê despesas e lucro; gerente e caixa não, nem pela API/base de dados.
+- **Servidor (migração 12, por aplicar):** políticas `p_despesas_sel/ins/del` só para `meu_papel()='dono'` (sem UPDATE concedido); custos já escondidos por `produtos_loja()`/`vendas_loja()`; nenhuma função devolve lucro ao gerente. Reversão em `reverter_migracao_12.sql`.
+- **Interface:** menu Despesas só para o dono; vista bloqueada; relatórios sem despesas/lucro/resultado para gerente e caixa (nem pedem `despesas`).
+- **Testes locais:** `permissoes.sh` 90/90 (+15 novos; controlo negativo com a política antiga falha 7), `correr.sh` 83/83 (também com migração 12), `atualizacao.sh` 15/15, reversões 10 e 12 passam, `node --test` 19 ok + 1 saltado (o de BD sem variáveis PG; corre à parte). Interface em Chromium com cliente simulado.
+- **Desenho TOTP:** `docs/TOTP-DESENHO.md`. **Assinatura APK:** `docs/ANDROID-ASSINATURA.md` secção 6.
