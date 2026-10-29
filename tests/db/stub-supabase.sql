@@ -13,3 +13,5 @@ grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
 create extension if not exists pgcrypto;
+-- Fatores MFA (só o necessário para testar a migração 15; no Supabase real esta tabela já existe)
+create table auth.mfa_factors(id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade, factor_type text not null default 'totp', status text not null default 'unverified', created_at timestamptz not null default now());

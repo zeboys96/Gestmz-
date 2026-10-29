@@ -23,3 +23,24 @@ begin
 end $$;
 create function t.chk(nome text, obtido text, esperado text) returns void language plpgsql as $$
 begin insert into t.res(ok, nome, obtido) values (coalesce(obtido ~ esperado, false), nome, left(coalesce(obtido, 'NULL'), 200)); end $$;
+-- como()/faz() com nível de garantia da sessão (aal1 = só senha; aal2 = senha + TOTP) e como service_role (Edge Function)
+create function t.como_aal(uid uuid, aal text, sql text) returns text language plpgsql as $$
+declare r text; v text;
+begin
+  perform set_config('request.jwt.claim.sub', coalesce(uid::text, ''), true);
+  perform set_config('request.jwt.claims', json_build_object('sub', uid, 'role', case when uid is null then 'anon' else 'authenticated' end, 'aal', aal, 'session_id', 'sessao-' || coalesce(uid::text, 'anon'))::text, true);
+  execute case when uid is null then 'set local role anon' else 'set local role authenticated' end;
+  begin execute sql into v; r := 'ok' || coalesce(':' || v, '');
+  exception when others then r := 'ERRO: ' || sqlerrm; end;
+  reset role; return r;
+end $$;
+create function t.svc(sql text) returns text language plpgsql as $$
+declare r text; v text;
+begin
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+  execute 'set local role service_role';
+  begin execute sql into v; r := 'ok' || coalesce(':' || v, '');
+  exception when others then r := 'ERRO: ' || sqlerrm; end;
+  reset role; return r;
+end $$;
