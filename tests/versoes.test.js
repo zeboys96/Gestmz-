@@ -120,3 +120,12 @@ test('workflow versao.yml: nunca publica; só cria rascunho, com aprovação, e 
   assert.ok(antigo.includes('assembleDebug') && antigo.includes('GestMZ-apk'), 'apk.yml continua a gerar o APK de teste');
   assert.ok(!/secrets\./.test(antigo), 'apk.yml não usa segredos');
 });
+
+test('workflow versao.yml: o APK de teste mostra o seu certificado (informativo, sem segredos, sem falhar)', () => {
+  const y = fs.readFileSync(path.join(R, '.github', 'workflows', 'versao.yml'), 'utf8');
+  assert.match(y, /SHA-256 do certificado do APK de TESTE/);
+  assert.match(y, /GITHUB_STEP_SUMMARY/);
+  const ramoTeste = y.slice(y.indexOf('APK de TESTE (chave de depuração efémera'), y.indexOf('mkdir -p saida'));
+  assert.ok(ramoTeste.length > 100 && !/\bexit 1\b/.test(ramoTeste), 'o ramo de teste nunca falha por causa do certificado');
+  assert.ok(!/KS_PASS|KEYSTORE_PASSWORD|KEY_PASSWORD|KS_B64/.test(ramoTeste), 'não toca em segredos');
+});

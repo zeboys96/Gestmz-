@@ -119,11 +119,28 @@ jobs:
             [ -n "$ESPERADA" ] || { echo "::error title=Falta a impressão digital::Crie a variável de repositório ANDROID_CERT_SHA256 com o SHA-256 do certificado de produção (Settings → Secrets and variables → Actions → Variables)."; exit 1; }
             OBTIDA=$(grep -m1 "certificate SHA-256 digest" "$RUNNER_TEMP/certs.txt" | sed 's/.*: *//' | tr -d ': ' | tr 'A-F' 'a-f')
             [ "$OBTIDA" = "$ESPERADA" ] || { echo "::error::a impressão digital do certificado do APK não é a esperada"; exit 1; }
+          else
+            # APK de TESTE (chave de depuração efémera, criada de novo em cada execução): só informa; nunca falha por isto.
+            # Duas execuções com valores diferentes provam que cada APK de teste tem outro certificado (e por isso não atualiza o instalado).
+            if "$BT"apksigner verify --print-certs "$F" > "$RUNNER_TEMP/certs.txt" 2>&1; then
+              OBTIDA=$(grep -m1 "certificate SHA-256 digest" "$RUNNER_TEMP/certs.txt" | sed 's/.*: *//' | tr -d ': ' | tr 'A-F' 'a-f')
+              echo "SHA-256 do certificado do APK de TESTE: $OBTIDA"
+              ESPERADA=$(printf '%s' "$ESPERADA_RAW" | tr -d ': \n' | tr 'A-F' 'a-f')
+              if [ -z "$ESPERADA" ]; then ESTADO="ainda não há certificado de produção definido (variável ANDROID_CERT_SHA256)";
+              elif [ "$OBTIDA" = "$ESPERADA" ]; then ESTADO="IGUAL ao certificado de produção";
+              else ESTADO="DIFERENTE do certificado de produção (esperado: o APK de teste nunca atualiza o de produção)"; fi
+              echo "Comparação: $ESTADO"
+              { echo "### Certificado do APK de teste"; echo; echo "- SHA-256: \`$OBTIDA\`"; echo "- $ESTADO"; echo "- Chave de depuração efémera: numa nova execução este valor muda."; } >> "$GITHUB_STEP_SUMMARY"
+              printf 'SHA-256 do certificado (APK de teste): %s\n%s\n' "$OBTIDA" "$ESTADO" > "$RUNNER_TEMP/certificado-teste.txt"
+            else
+              echo "::warning::não foi possível ler o certificado do APK de teste"; cat "$RUNNER_TEMP/certs.txt"
+            fi
           fi
           mkdir -p saida
           N="GestMZ-$VERSAO-android$( [ "$TIPO" = "candidata" ] || echo -teste ).apk"
           cp "$F" "saida/$N"
           (cd saida && sha256sum "$N" | tee "$N.sha256")
+          [ -f "$RUNNER_TEMP/certificado-teste.txt" ] && cp "$RUNNER_TEMP/certificado-teste.txt" "saida/$N.certificado.txt" || true
       - uses: actions/upload-artifact@v4
         with:
           name: GestMZ-android-${{ needs.validar.outputs.versao }}-${{ inputs.tipo }}
