@@ -65,6 +65,7 @@ function traduz(m) {
     [/duplicate key.*codigo/i, 'Já existe um produto com este código de barras.'],
     [/duplicate key/i, 'Já existe um registo igual.'],
     [/email rate limit|rate limit/i, 'Demasiados pedidos. Espere um minuto e tente de novo.'],
+    [/MFA_NECESSARIO/, 'Confirme com o código do autenticador (Google Authenticator): saia e entre de novo, escrevendo o código.'],
     [/JWT expired/i, 'A sessão expirou. Entre de novo.']
   ];
   for (const [re, txt] of t) if (re.test(m)) return txt;
@@ -318,6 +319,7 @@ async function boot() {
 async function entrar() {
   try {
     const { data } = await sb.auth.getSession(); if (!data.session) return vLogin();
+    if (window.GestTOTP && await GestTOTP.precisaDesafio()) return GestTOTP.vDesafio(entrar);   // conta com autenticador: pede o código antes de abrir os dados
     const r = await q(sb.from('perfis').select('*').eq('id', data.session.user.id));
     const perfil = r[0];
     if (!perfil) return vSemAcesso();

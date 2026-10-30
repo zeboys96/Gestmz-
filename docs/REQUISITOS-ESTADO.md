@@ -43,3 +43,9 @@ Migrações 10, 11, 12, 13, 14 (produção); Edge Function de recuperação; MFA
 - **Interface:** menu Despesas só para o dono; vista bloqueada; relatórios sem despesas/lucro/resultado para gerente e caixa (nem pedem `despesas`).
 - **Testes locais:** `permissoes.sh` 90/90 (+15 novos; controlo negativo com a política antiga falha 7), `correr.sh` 83/83 (também com migração 12), `atualizacao.sh` 15/15, reversões 10 e 12 passam, `node --test` 19 ok + 1 saltado (o de BD sem variáveis PG; corre à parte). Interface em Chromium com cliente simulado.
 - **Desenho TOTP:** `docs/TOTP-DESENHO.md`. **Assinatura APK:** `docs/ANDROID-ASSINATURA.md` secção 6.
+
+## Atualização 31/10/2026 — TOTP, cópia das vendas pendentes, certificado do APK de teste
+- **TOTP (1A/2A/3A):** implementado só em desenvolvimento — `docs/TOTP-IMPLEMENTACAO.md`. Migração 15, Edge Function e interruptor NÃO aplicados/publicados; obrigatório do super continua DESLIGADO e protegido por trava.
+- **Cópia/restauro das vendas pendentes:** `www/copia.js` (Conta → «Cópia das vendas por enviar»); só na mesma conta/loja, resumo SHA-256, validação campo a campo, tudo-ou-nada, sem custos; o servidor continua idempotente (`vendas_ref_cliente_uq`). Testado em Node e Chromium simulado; **não em telemóvel real**.
+- **Certificado do APK de teste:** passo informativo em `versao.yml` (SHA-256 no resumo da execução e no ficheiro `.certificado.txt`); falta correr o workflow duas vezes para ver valores diferentes.
+- Chave Android: **não criada**.
