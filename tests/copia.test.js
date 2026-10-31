@@ -135,3 +135,26 @@ test('cópia no navegador: guardar, "reinstalar" (apagar dados), restaurar, envi
     assert.deepStrictEqual(erros, []); await ctx.close();
   } finally { await b.close(); s.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('cópia na aplicação Android: o ficheiro sai pela folha de partilha (Filesystem + Share), não por ligação de descarga', { skip: !chromium && 'playwright indisponível', timeout: 120000 }, async () => {
+  const s = srv(); await new Promise(r => s.listen(0, r)); const url = 'http://127.0.0.1:' + s.address().port + '/'; const b = await chromium.launch();
+  try {
+    const ctx = await b.newContext(); const p = await ctx.newPage(); const erros = []; p.on('pageerror', e => erros.push(e.message)); await p.goto(url); await p.waitForSelector('#f');
+    const r = await p.evaluate(async () => {
+      const reg = { escritas: [], partilhas: [], ancoras: 0 };
+      const orig = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { reg.ancoras++; };
+      window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', Plugins: { Filesystem: { writeFile: async o => { reg.escritas.push(o); return { uri: 'file:///cache/' + o.path }; } }, Share: { share: async o => { reg.partilhas.push(o); return {}; } } } };
+      await download('gestmz-vendas-pendentes-2026-10-31.json', '{"formato":"gestmz-fila"}', 'application/json');
+      const ok = JSON.parse(JSON.stringify(reg));
+      window.Capacitor.Plugins.Share.share = async () => { const e = new Error('Share canceled'); throw e; };
+      let cancelou = 'sem erro'; try { await download('x.json', '{}'); } catch (e) { cancelou = 'erro: ' + e.message; }
+      window.Capacitor.Plugins.Filesystem.writeFile = async () => { throw new Error('sem espaço'); };
+      let falhou = ''; try { await download('x.json', '{}'); } catch (e) { falhou = e.message; }
+      HTMLAnchorElement.prototype.click = orig; return { ok, cancelou, falhou };
+    });
+    assert.deepStrictEqual(r.ok.escritas, [{ path: 'gestmz-vendas-pendentes-2026-10-31.json', data: '{"formato":"gestmz-fila"}', directory: 'CACHE', encoding: 'utf8' }]);
+    assert.strictEqual(r.ok.partilhas.length, 1); assert.strictEqual(r.ok.partilhas[0].url, 'file:///cache/gestmz-vendas-pendentes-2026-10-31.json'); assert.strictEqual(r.ok.ancoras, 0, 'não usa ligação de descarga');
+    assert.strictEqual(r.cancelou, 'sem erro', 'cancelar a partilha não é erro'); assert.match(r.falhou, /Não foi possível guardar o ficheiro.*sem espaço/, 'falha real é mostrada (nunca em silêncio)');
+    assert.deepStrictEqual(erros, []); await ctx.close();
+  } finally { await b.close(); s.close(); }
+});

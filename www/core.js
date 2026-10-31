@@ -119,6 +119,16 @@ function ask(msg, fn, txt, danger) { return modal('Confirmar', `<p>${esc(msg)}</
 const fld = (l, n, v, t, x, hint) => `<label>${l}<input class="in" name="${n}" type="${t || 'text'}" value="${esc(v == null ? '' : v)}" ${x || ''}>${hint ? `<span class="hint">${hint}</span>` : ''}</label>`;
 const opts = (arr, sel) => arr.map(a => { const v = Array.isArray(a) ? a[0] : a, t = Array.isArray(a) ? a[1] : a; return `<option value="${esc(v)}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(t)}</option>`; }).join('');
 async function download(name, text, type) {
+  /* aplicação Android (APK): a WebView não descarrega ficheiros por ligação; grava na cache da app e abre a folha de partilha do Android
+     (guardar no Drive, enviar por WhatsApp/e-mail…), como já se faz com os recibos. Sem isto, a cópia das vendas pendentes não sairia do aparelho. */
+  try {
+    const C = window.Capacitor, P = (C && C.Plugins) || {};
+    if (C && C.isNativePlatform && C.isNativePlatform() && P.Filesystem && P.Share) {
+      const r = await P.Filesystem.writeFile({ path: name, data: String(text), directory: 'CACHE', encoding: 'utf8' });
+      await P.Share.share({ title: name, url: r.uri, dialogTitle: 'Guardar ou enviar «' + name + '»' });
+      return;
+    }
+  } catch (e) { if (e && /cancel/i.test(String(e.name) + String(e.message))) return; throw new Error('Não foi possível guardar o ficheiro neste aparelho: ' + ((e && e.message) || e)); }
   const blob = new Blob([text], { type: type || 'text/plain' });
   try {
     const f = new File([blob], name, { type: type || 'text/plain' });

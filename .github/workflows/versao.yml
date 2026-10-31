@@ -3,6 +3,7 @@ name: Preparar versão (Android e Windows)
 # Este workflow NUNCA publica uma versão. No máximo cria um RASCUNHO de Release (só visível para quem gere o repositório),
 # e só depois de aprovação manual no ambiente "aprovacao-release". Publicar e atualizar www/versions.json são passos humanos.
 # O workflow "Gerar APK" (apk.yml) continua igual e serve para testes rápidos.
+# 31/10/2026: APK de teste com a correção do descarregamento de ficheiros na aplicação Android (cópia das vendas pendentes).
 
 on:
   # TEMPORÁRIO: o GitHub só deixa lançar um workflow à mão quando ele já está no ramo principal. Para o validar sem fazer merge,
