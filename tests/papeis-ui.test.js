@@ -9,8 +9,8 @@ const FAKE = `(function(){
   const build = (t) => { const b = { select(){ return b; }, order(){ return b; }, range(){ return b; }, eq(){ return b; }, gt(){ return b; }, gte(){ return b; }, lt(){ return b; }, lte(){ return b; }, limit(){ return b; }, update(){ return b; }, insert(){ return b; }, delete(){ return b; },
       then(res, rej){ window.__chamadas.push('from:' + t); return Promise.resolve({ data: (window.__T[t] || []), error: null }).then(res, rej); } }; return b; };
   const sbf = { auth:{ getSession: async()=>({data:{session:null}}), onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}), signOut: async()=>({}) },
-    rpc: (n, a) => { window.__chamadas.push('rpc:' + n); const dados = n === 'produtos_loja' ? window.__T.produtos : n === 'lotes_loja' ? window.__T.lotes : n === 'vendas_loja' ? (window.__T.vendas || []) : n === 'minha_loja_info' ? window.__T.loja : null;
-      const b = { range(){ return b; }, order(){ return b; }, then(res, rej){ return Promise.resolve(window.__semFuncoes && n !== 'registar_venda' ? { data: null, error: { message: 'Could not find the function public.' + n + ' in the schema cache' } } : { data: dados, error: null }).then(res, rej); } }; return b; },
+    rpc: (n, a) => { window.__chamadas.push('rpc:' + n); const dados = n === 'produtos_venda' ? window.__T.produtos_venda : n === 'produtos_loja' ? window.__T.produtos : n === 'lotes_loja' ? window.__T.lotes : n === 'vendas_loja' ? (window.__T.vendas || []) : n === 'minha_loja_info' ? window.__T.loja : null;
+      const b = { range(){ return b; }, order(){ return b; }, then(res, rej){ return Promise.resolve((window.__semFuncoes && n !== 'registar_venda') || (n === 'produtos_venda' && !window.__T.produtos_venda) ? { data: null, error: { message: 'Could not find the function public.' + n + ' in the schema cache' } } : { data: dados, error: null }).then(res, rej); } }; return b; },
     channel: () => ({ on(){ return this; }, subscribe(){ return this; } }), removeChannel(){}, from: build };
   window.supabase = { createClient: () => sbf };
 })();`;

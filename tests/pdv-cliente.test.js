@@ -14,8 +14,8 @@ const FAKE = `(function(){
         if (m === 'rede') return Promise.resolve({ data: null, error: { message: 'Failed to fetch' } });
         if (m === 'erro') return Promise.resolve({ data: null, error: { message: 'Stock insuficiente: X' } });
         return Promise.resolve({ data: { id: 'v1', num: 7, data: new Date().toISOString(), usuario_nome: 'Teste', pagamento: a.p_pagamento, subtotal: 10, desconto: 0, iva: 0, total: 10, recebido: 0, troco: 0, itens: [{ nome: 'Produto', qtd: 1, preco: 10, total: 10, un: 1 }], cliente_id: a.p_cliente }, error: null }); }
-      const dados = n === 'produtos_loja' ? window.__T.produtos : n === 'lotes_loja' ? window.__T.lotes : n === 'vendas_loja' ? [] : null;
-      const b = { range(){ return b; }, order(){ return b; }, then(res, rej){ return Promise.resolve(window.__falhaLeitura && dados ? { data: null, error: { message: 'Failed to fetch' } } : { data: dados, error: null }).then(res, rej); } }; return b; },
+      const dados = n === 'produtos_venda' ? window.__T.produtos_venda : n === 'produtos_loja' ? window.__T.produtos : n === 'lotes_loja' ? window.__T.lotes : n === 'vendas_loja' ? [] : null;
+      const b = { range(){ return b; }, order(){ return b; }, then(res, rej){ return Promise.resolve((window.__falhaLeitura && dados) || (n === 'produtos_venda' && !window.__T.produtos_venda) ? { data: null, error: { message: (n === 'produtos_venda' && !window.__T.produtos_venda && !window.__falhaLeitura) ? 'Could not find the function public.produtos_venda in the schema cache' : 'Failed to fetch' } } : { data: dados, error: null }).then(res, rej); } }; return b; },
     channel: () => ({ on(){ return this; }, subscribe(){ return this; } }), removeChannel(){}, from: build };
   window.supabase = { createClient: () => sbf };
 })();`;
@@ -69,9 +69,11 @@ test('venda: o cliente selecionado só é limpo depois da venda concluída com s
     ({ ctx, p, erros } = await abrirPdv(b, url, 'dono')); await adicionar(p); await p.selectOption('#cli', 'c1');
     await p.click('#lmp'); await p.waitForTimeout(300);
     assert.strictEqual(await p.evaluate(() => cart.length), 0, 'o dono pode cancelar a venda em curso'); assert.strictEqual(await p.inputValue('#cli'), '', 'cancelada: o cliente não fica herdado'); await ctx.close();
+    // a venda ainda em curso pode ser descartada pelo caixa sem autorização (nada tinha sido gravado); o que já foi concluído continua protegido (testes de anulação abaixo)
     ({ ctx, p, erros } = await abrirPdv(b, url, 'caixa')); await adicionar(p); await p.selectOption('#cli', 'c1');
-    await p.click('#lmp'); await p.waitForSelector('.modal'); await p.evaluate(() => document.querySelectorAll('.modal').forEach(m => m.remove())); await p.waitForTimeout(200);
-    assert.strictEqual(await p.evaluate(() => cart.length), 1, 'o caixa sem autorização não cancela'); assert.strictEqual(await p.inputValue('#cli'), 'c1', 'sem autorização, o cliente mantém-se'); await ctx.close();
+    await p.click('#lmp'); await p.waitForTimeout(200);
+    assert.strictEqual(await p.locator('.modal').count(), 0, 'o caixa não precisa de autorização para descartar a venda em curso');
+    assert.strictEqual(await p.evaluate(() => cart.length), 0, 'a venda em curso foi descartada'); assert.strictEqual(await p.inputValue('#cli'), '', 'sem cliente herdado'); await ctx.close();
     // 6) a venda grava, mas a atualização posterior dos dados falha: o cliente é limpo na mesma e o recibo aparece
     ({ ctx, p, erros } = await abrirPdv(b, url, 'dono')); await adicionar(p); await p.selectOption('#cli', 'c1'); await p.selectOption('#pag', 'Fiado');
     await p.evaluate(() => { window.__falhaLeitura = true; }); await p.click('#fin'); await p.waitForSelector('#pr');

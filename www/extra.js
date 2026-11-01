@@ -66,7 +66,7 @@ function guardarCache() {
 }
 async function sha256hex(t) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
 async function guardarPinLocal(uid, pin) { try { localStorage.setItem('gestmz_pinh_' + uid, await sha256hex(uid + ':gestmz:' + pin)); } catch (e) { /* ok */ } }
-function limparCache() { try { localStorage.removeItem('gestmz_cache'); Object.keys(localStorage).filter(k => k.startsWith('gestmz_pinh_')).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ok */ } }
+function limparCache() { try { localStorage.removeItem('gestmz_cache'); Object.keys(localStorage).filter(k => k.startsWith('gestmz_pinh_')).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ok */ } if (typeof fotosLimpar === 'function') fotosLimpar(); }
 
 async function entrarOffline() {
   const c = jGet('gestmz_cache', null);
@@ -113,6 +113,12 @@ function enfileirarVenda(ref, dados, t) {
       if (p.un_por_caixa) lotesOrd(p).forEach(l => { if (falta <= 0) return; const k = Math.min(Math.floor((l.qtd - l.soltas) / p.un_por_caixa), Math.ceil(falta / p.un_por_caixa)), t = Math.min(k * p.un_por_caixa, falta); if (k > 0) { l.qtd -= t; l.soltas += k * p.un_por_caixa - t; falta -= t; } });
     }
   });
+  // caixa: não vê lotes; acompanha a disponibilidade que o servidor lhe deu (o servidor volta a calcular ao sincronizar)
+  if (!veStock()) p_ordem(itens).forEach(i => {
+    const p = prodById(i.produto_id); if (!p || p.disp_un == null) return;
+    p.disp_un = Math.max(0, p.disp_un - i.un);
+    if (p.un_por_caixa) p.disp_cx = Math.max(0, Math.min(i.caixa ? p.disp_cx - i.qtd : p.disp_cx, Math.floor(p.disp_un / p.un_por_caixa)));
+  });
   if (dados.pagamento === 'Fiado' && dados.cliente) { const c = S.clientes.find(x => x.id === dados.cliente); if (c) c.divida = r2(+c.divida + t.tot); }
   guardarCache(); netUpdate();
   return venda;
@@ -122,7 +128,7 @@ let sincA = false;
 async function sincronizarFila() {
   if (sincA || !S.perfil || S.perfil.papel === 'super' || !navigator.onLine) return 0;
   const todas = lerFila(), minhas = todas.filter(x => x.uid === S.perfil.id && !x.erro);
-  if (!minhas.length) return 0;
+  if (!minhas.length) { if (typeof sincronizarFechos === 'function') await sincronizarFechos(); return 0; }
   sincA = true; let ok = 0;
   try {
     for (const it of minhas) {
@@ -135,6 +141,8 @@ async function sincronizarFila() {
       }
     }
   } finally { sincA = false; }
+  // o fecho de caixa só segue depois das vendas (o servidor calcula o fecho com as vendas que já lá estão)
+  if (typeof sincronizarFechos === 'function' && !lerFila().some(x => x.uid === S.perfil.id && !x.erro)) await sincronizarFechos();
   if (ok) { toast(ok === 1 ? '1 venda enviada.' : ok + ' vendas enviadas.'); try { await recarregarProdutos(); S.clientes = await all(() => sb.from('clientes').select('*').order('nome')); guardarCache(); } catch (e) { /* ok */ } }
   netUpdate(); return ok;
 }
@@ -150,9 +158,10 @@ async function aoVoltarNet() {
 function netUpdate() {
   let el = $('#net'); if (!el) { el = document.createElement('button'); el.id = 'net'; el.type = 'button'; el.hidden = true; el.onclick = abrirFila; document.body.appendChild(el); }
   const f = S.perfil ? minhaFila() : [], err = f.filter(x => x.erro).length, pend = f.length - err, off = !navigator.onLine;
-  if (!S.perfil || (!off && !f.length)) { el.hidden = true; return; }
-  el.hidden = false; el.className = err ? 'bad' : (off ? 'off' : 'sync');
-  el.textContent = (off ? 'Sem internet' : 'A enviar') + (pend ? ` · ${pend} venda(s) por enviar` : '') + (err ? ` · ${err} com problema` : '');
+  const fp = S.perfil && typeof fechosPendentes === 'function' ? fechosPendentes() : [], ferr = fp.filter(x => x.erro).length;
+  if (!S.perfil || (!off && !f.length && !fp.length)) { el.hidden = true; return; }
+  el.hidden = false; el.className = (err || ferr) ? 'bad' : (off ? 'off' : 'sync');
+  el.textContent = (off ? 'Sem internet' : 'A enviar') + (pend ? ` · ${pend} venda(s) por enviar` : '') + (err ? ` · ${err} com problema` : '') + (fp.length ? ` · fecho de caixa ${ferr ? 'com problema' : 'por confirmar'}` : '');
 }
 function abrirFila() {
   const f = minhaFila();
@@ -166,4 +175,4 @@ function abrirFila() {
 }
 window.addEventListener('online', () => aoVoltarNet());
 window.addEventListener('offline', () => netUpdate());
-setInterval(() => { if (S.perfil && navigator.onLine && minhaFila().some(x => !x.erro)) sincronizarFila(); }, 30000);
+setInterval(() => { if (S.perfil && navigator.onLine && (minhaFila().some(x => !x.erro) || (typeof fechosPendentes === 'function' && fechosPendentes().some(x => !x.erro)))) sincronizarFila(); }, 30000);

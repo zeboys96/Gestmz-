@@ -25,7 +25,10 @@ const ICONS = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   check: '<path d="M5 12l5 5 9-10"/>',
   barcode: '<path d="M4 5v14M7 5v14M11 5v14M14 5v14M18 5v14M20 5v14"/>',
-  warn: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>'
+  warn: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
+  sino: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
+  caixa: '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V5h8v5M8 15h8"/>',
+  foto: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/>'
 };
 const ico = (n, s = 20) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 const logo = (s = 36) => `<svg width="${s}" height="${s}" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="12" fill="#F4B400"/><rect x="10" y="26" width="7" height="12" rx="2" fill="#00453A"/><rect x="20.5" y="18" width="7" height="20" rx="2" fill="#00453A"/><rect x="31" y="9" width="7" height="29" rx="2" fill="#00453A"/></svg>`;
@@ -350,7 +353,7 @@ async function entrar() {
 
 /* ---------- estrutura ---------- */
 const NAV_LOJA = [
-  ['painel', 'painel', 'Painel', 'dono,gerente'], ['pdv', 'vender', 'Vender', 'dono,gerente,caixa'], ['vendas', 'vendas', 'Vendas', 'dono,gerente,caixa'],
+  ['painel', 'painel', 'Painel', 'dono,gerente'], ['pdv', 'vender', 'Vender', 'dono,gerente,caixa'], ['vendas', 'vendas', 'Vendas', 'dono,gerente,caixa'], ['fecho', 'caixa', 'Fechar caixa', 'gerente,caixa'], ['fechos', 'caixa', 'Fechos de caixa', 'dono'],
   ['produtos', 'produtos', 'Produtos', 'dono,gerente,caixa'], ['clientes', 'clientes', 'Clientes', 'dono,gerente,caixa'], ['despesas', 'despesas', 'Despesas', 'dono'],
   ['relatorios', 'relatorios', 'Relatórios', 'dono,gerente'], ['equipa', 'equipa', 'Equipa', 'dono,gerente'], ['assinatura', 'assinatura', 'Assinatura', 'dono'],
   ['registo', 'registo', 'Registo', 'dono,gerente'], ['suporte', 'ajuda', 'Suporte', 'dono'], ['ajuda', 'ajuda', 'Ajuda', 'dono,gerente,caixa'], ['perfil', 'conta', 'Conta', 'dono,gerente,caixa'], ['sair', 'sair', 'Sair', 'dono,gerente,caixa']
@@ -359,10 +362,10 @@ const navLoja = () => NAV_LOJA.filter(n => n[3].split(',').includes(S.perfil.pap
 const navSuper = () => [['s_lojas', 'lojas', 'Lojas'], ['s_pagamentos', 'assinatura', 'Pagamentos'], ['s_suporte', 'ajuda', 'Suporte'], ['s_config', 'conta', 'Preços e conta'], ['perfil', 'registo', 'Senha'], ['sair', 'sair', 'Sair']];
 function shell(items) {
   const sub = S.loja ? S.loja.nome : 'Dono do sistema';
-  $('#app').innerHTML = `<div class="shell"><aside class="side"><div class="brandrow">${logo(34)}<div><b>GestMZ</b><small>${esc(sub)}</small></div></div><nav id="nav" aria-label="Menu principal"></nav><div class="me">${avatar(S.perfil)}<div><b>${esc(S.perfil.nome)}</b><span>${PAPEL[S.perfil.papel]}</span></div></div></aside><div style="flex:1;min-width:0"><div id="banner"></div><main id="main"></main></div></div>`;
+  $('#app').innerHTML = `<div class="shell"><aside class="side"><div class="brandrow">${logo(34)}<div><b>GestMZ</b><small>${esc(sub)}</small></div></div><nav id="nav" aria-label="Menu principal"></nav><div class="me">${avatar(S.perfil)}<div><b>${esc(S.perfil.nome)}</b><span>${PAPEL[S.perfil.papel]}</span></div></div></aside><div style="flex:1;min-width:0"><div id="banner"></div><div id="topline"></div><main id="main"></main></div></div>`;
   $('#nav').innerHTML = items.map(n => `<button data-v="${n[0]}">${ico(n[1])}<span>${n[2]}</span><span class="badge" hidden></span></button>`).join('');
   $('#nav').onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'sair') return sair(); go(b.dataset.v); };
-  banner();
+  banner(); if (typeof montarTopo === 'function') montarTopo();
 }
 async function go(v, silencioso) {
   cur = v; $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
@@ -387,7 +390,13 @@ async function lerLista(fn, args, alt, ordem) {
   try { return await all(() => { const b = sb.rpc(fn, args); return ordem ? b.order(ordem[0], ordem[1]) : b; }); }
   catch (e) { if (!semFuncao(e)) throw e; return await all(alt); }
 }
-const lerProdutos = () => lerLista('produtos_loja', { p_so_ativos: true }, () => sb.from('produtos').select('*').eq('ativo', true).order('nome'), ['nome', { ascending: true }]);
+const lerProdutosGeral = () => lerLista('produtos_loja', { p_so_ativos: true }, () => sb.from('produtos').select('*').eq('ativo', true).order('nome'), ['nome', { ascending: true }]);
+/* Caixa: o servidor só devolve produtos com stock para vender (sem custos, mínimos, lotes nem validades). Servidor sem a função (migração 16 por aplicar): leitura antiga. */
+async function lerProdutos() {
+  if (!S.perfil || S.perfil.papel !== 'caixa') return lerProdutosGeral();
+  try { return await all(() => sb.rpc('produtos_venda').order('nome', { ascending: true })); }
+  catch (e) { if (!semFuncao(e)) throw e; return lerProdutosGeral(); }
+}
 const lerLotes = async () => veStock() ? lerLista('lotes_loja', {}, () => sb.from('lotes').select('*').gt('qtd', 0)) : [];
 const lerVendas = (desde, ate) => lerLista('vendas_loja', { p_desde: desde || null, p_ate: ate || null },
   () => { let b = sb.from('vendas').select('*'); if (desde) b = b.gte('data', desde); if (ate) b = b.lt('data', ate); return b.order('data', { ascending: false }); }, ['data', { ascending: false }]);
@@ -421,9 +430,9 @@ const soltasDe = (p, l) => p.un_por_caixa ? Math.min(l.qtd, l.soltas == null ? l
 const naValidade = l => !l.validade || diasPara(l.validade) >= 0;
 const soltasP = p => p.lotes.reduce((a, l) => a + soltasDe(p, l), 0);
 const caixasP = p => p.un_por_caixa ? p.lotes.reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
-const caixasVend = p => !veStock() ? SEM_LIMITE : p.un_por_caixa ? p.lotes.filter(naValidade).reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
+const caixasVend = p => !veStock() ? (p.disp_cx != null ? +p.disp_cx : SEM_LIMITE) : p.un_por_caixa ? p.lotes.filter(naValidade).reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
 const stockTxt = p => p.un_por_caixa ? `${caixasP(p)} ${(p.embalagem || 'caixa').toLowerCase()}(s) fechada(s) + ${soltasP(p)} solta(s)` : '';
-const vendavel = p => !veStock() ? SEM_LIMITE : p.lotes.filter(l => !l.validade || diasPara(l.validade) >= 0).reduce((a, l) => a + l.qtd, 0);
+const vendavel = p => !veStock() ? (p.disp_un != null ? +p.disp_un : SEM_LIMITE) : p.lotes.filter(l => !l.validade || diasPara(l.validade) >= 0).reduce((a, l) => a + l.qtd, 0);
 const proxVal = p => { const ls = p.lotes.filter(l => l.validade).sort((a, b) => a.validade.localeCompare(b.validade)); return ls[0] ? ls[0].validade : ''; };
 function estado(p) {
   if (!veStock()) return 'ok';
@@ -462,6 +471,7 @@ function banner() {
 function pararRT() {
   canais.forEach(c => { try { sb.removeChannel(c); } catch (e) { /* ok */ } }); canais = [];
   clearInterval(hb); clearInterval(poll); hb = poll = null;
+  if (typeof notifParar === 'function') notifParar();
 }
 function iniciarRT() {
   pararRT();
@@ -480,6 +490,8 @@ function iniciarRT() {
   } catch (e) { /* sem tempo real: a app continua a funcionar */ }
   const batida = () => { sb.from('perfis').update({ ultimo_acesso: new Date().toISOString() }).eq('id', S.perfil.id).then(() => { }, () => { }); };
   batida(); hb = setInterval(batida, 60000);
+  if (typeof notifIniciar === 'function') notifIniciar();
+  if (S.perfil.papel === 'caixa') poll = setInterval(() => { if (navigator.onLine && cur === 'pdv') stock(); }, 45000);   // caixa: a lista acompanha as reposições mesmo sem tempo real
   if (S.perfil.papel === 'dono') { contarSuporte(false); poll = setInterval(() => contarSuporte(true), 120000); }
 }
 async function contarSuporte(avisar) {
