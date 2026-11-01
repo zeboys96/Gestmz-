@@ -213,6 +213,7 @@ VIEWS.perfil = async function () {
   const fl = $('#fl'); if (fl) fl.onsubmit = async e => { e.preventDefault(); const d = Object.fromEntries(new FormData(fl)); try { await q(sb.rpc('atualizar_loja', { p_nome: d.nome, p_tipo: d.tipo, p_nuit: d.nuit, p_tel: d.tel, p_endereco: d.endereco })); await recarregarLoja(); shell(navLoja()); go('perfil', true); toast('Dados guardados.'); } catch (er) { erro(er); } };
   if (window.GestTOTP) GestTOTP.cartaoConta($('#main')).catch(() => { });
   if (window.GestCopia) GestCopia.cartaoConta($('#main'));
+  if (window.GestLegal) GestLegal.cartaoConta($('#main'));
   if (window.GestMZAtualizacao) GestMZAtualizacao.cartaoConta($('#main'));
 };
 
