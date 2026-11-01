@@ -1,6 +1,6 @@
 # Novidades da migração 16 — stock zero, fotografias, notificações e fecho de caixa
 
-Estado: **código no ramo `desenvolvimento/atualizacoes`; migração 16 NÃO aplicada em produção; nenhuma função publicada; nada fundido em `main`.**
+Estado: **código no ramo `desenvolvimento/atualizacoes`. Migrações 10 e 16 APLICADAS em produção em 01/11/2026 (autorizadas pelo dono, com backup prévio e verificação depois); migração 12 NÃO aplicada; nenhuma função publicada; nada fundido em `main`.**
 «Simulação» = Chromium com cliente Supabase simulado, ou Postgres 16 local descartável. Não é o Supabase real nem um telefone.
 
 ## 1. O que foi feito

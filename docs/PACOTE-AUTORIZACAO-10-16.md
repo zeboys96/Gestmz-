@@ -1,4 +1,4 @@
-# Pacote de autorização — migrações 10 e 16 (NADA foi executado em produção)
+# Pacote de autorização — migrações 10 e 16 (EXECUTADAS em produção a 01/11/2026, com autorização expressa do dono)
 
 Ordem: **(A) ensaio num projeto Supabase de TESTE → (B) backup da produção → (C) migração 10 → (D) migração 16.**
 A migração 12 e o TOTP (15) **não** fazem parte deste pacote. Só avanço com a sua resposta expressa a cada passo.
