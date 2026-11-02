@@ -62,14 +62,19 @@ test('o repositório está consistente (versão única e versions.json válido)'
 test('atualizar-versions.js: calcula o SHA-256, gera o endereço e recusa versões não maiores', () => {
   const t = fs.mkdtempSync(path.join(os.tmpdir(), 'gmz-')), f = path.join(t, 'GestMZ-1.1.0-android.apk');
   fs.writeFileSync(f, 'conteudo de teste');
-  const run = (...a) => cp.spawnSync(process.execPath, [path.join(R, 'scripts', 'atualizar-versions.js'), ...a], { encoding: 'utf8' });
-  const sai = path.join(t, 'p.json');
+  // o script lê www/versions.json do repositório onde está; testa-se numa cópia com o estado «nada publicado», para não depender do estado real
+  const base = path.join(t, 'base'); fs.mkdirSync(path.join(base, 'www'), { recursive: true }); fs.mkdirSync(path.join(base, 'scripts'));
+  fs.copyFileSync(path.join(R, 'www', 'atualizacao.js'), path.join(base, 'www', 'atualizacao.js')); fs.copyFileSync(path.join(R, 'scripts', 'atualizar-versions.js'), path.join(base, 'scripts', 'atualizar-versions.js'));
+  const vazio = pl => ({ ultima: null, minima: null, bloquear: false, publicada_em: null, url: null, sha256: null, notas: [], requisitos: pl });
+  fs.writeFileSync(path.join(base, 'www', 'versions.json'), JSON.stringify({ esquema: 1, atualizado_em: '2026-10-26', plataformas: { android: vazio({ android_min: 8 }), windows: vazio({ windows_min: '10.0.17763' }) } }));
+  const run = (...a) => cp.spawnSync(process.execPath, [path.join(base, 'scripts', 'atualizar-versions.js'), ...a], { encoding: 'utf8' });
+  const sai = path.join(t, 'p.json'), antes = fs.readFileSync(path.join(base, 'www', 'versions.json'), 'utf8');
   const ok = run('--plataforma', 'android', '--versao', '1.1.0', '--ficheiro', f, '--notas', 'Primeira;Segunda', '--saida', sai);
   assert.equal(ok.status, 0, ok.stderr);
   const p = JSON.parse(fs.readFileSync(sai, 'utf8')).plataformas.android;
   assert.equal(p.ultima, '1.1.0'); assert.equal(p.url, URL_A('1.1.0')); assert.deepEqual(p.notas, ['Primeira', 'Segunda']);
   assert.equal(p.sha256, require('crypto').createHash('sha256').update('conteudo de teste').digest('hex'));
-  assert.equal(JSON.parse(fs.readFileSync(path.join(R, 'www', 'versions.json'), 'utf8')).plataformas.android.ultima, null, 'o script não pode alterar o ficheiro do repositório');
+  assert.equal(fs.readFileSync(path.join(base, 'www', 'versions.json'), 'utf8'), antes, 'o script não pode alterar o ficheiro do repositório');
   assert.notEqual(run('--plataforma', 'android', '--versao', '1.1.0', '--ficheiro', f).status, 0, 'sem --saida tem de falhar');
   assert.notEqual(run('--plataforma', 'linux', '--versao', '1.1.0', '--ficheiro', f, '--saida', sai).status, 0);
   // não deixa publicar uma versão igual ou mais antiga do que a já publicada

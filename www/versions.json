@@ -1,18 +1,24 @@
 {
   "esquema": 1,
-  "atualizado_em": "2026-10-26",
+  "atualizado_em": "2026-11-03",
   "plataformas": {
     "android": {
-      "ultima": null,
-      "minima": null,
+      "ultima": "1.1.0",
+      "minima": "1.0.0",
       "bloquear": false,
-      "publicada_em": null,
-      "url": null,
-      "sha256": null,
-      "notas": [],
+      "publicada_em": "2026-11-03",
+      "url": "https://github.com/zeboys96/Gestmz-/releases/download/v1.1.0/GestMZ-1.1.0-android.apk",
+      "sha256": "b11b36dead10d025af00db8fa61ad6824fc90a3edb389311390c72f20fa160b7",
+      "notas": [
+        "Termos de utilização e política de privacidade",
+        "Fecho de caixa, notificações e fotografias dos produtos",
+        "Google Autenticador para o administrador",
+        "Ajuda atualizada"
+      ],
       "requisitos": {
         "android_min": 8
-      }
+      },
+      "tamanho": 3402106
     },
     "windows": {
       "ultima": null,
