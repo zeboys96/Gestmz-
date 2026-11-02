@@ -49,7 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERSAO: ${{ needs.validar.outputs.versao }}
-      TIPO: ${{ inputs.tipo }}
+      # Por push (gatilho temporário) assina com a chave permanente como a candidata, mas nunca cria Release (o job «rascunho» só corre com tipo=candidata escolhido à mão).
+      TIPO: ${{ inputs.tipo || 'candidata' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -69,7 +70,7 @@ jobs:
           grep -q BrowserMultiFormatReader www/zxing.js
       - run: npx cap add android
       - name: Preparar a chave de assinatura (só na candidata)
-        if: ${{ inputs.tipo == 'candidata' }}
+        if: ${{ env.TIPO == 'candidata' }}
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -144,7 +145,7 @@ jobs:
           [ -f "$RUNNER_TEMP/certificado-teste.txt" ] && cp "$RUNNER_TEMP/certificado-teste.txt" "saida/$N.certificado.txt" || true
       - uses: actions/upload-artifact@v4
         with:
-          name: GestMZ-android-${{ needs.validar.outputs.versao }}-${{ inputs.tipo }}
+          name: GestMZ-android-${{ needs.validar.outputs.versao }}-${{ env.TIPO }}
           path: saida/*
           if-no-files-found: error
 
