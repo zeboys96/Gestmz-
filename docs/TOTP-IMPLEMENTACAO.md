@@ -1,6 +1,6 @@
 # GestMZ — TOTP: o que foi implementado (só em desenvolvimento) e como se valida
 
-Estado: **nada aplicado nem publicado em produção.** Migração 15 por aplicar; Edge Function `recuperar-totp` por criar no Supabase; interruptor «MFA obrigatório para o dono do sistema» **desligado**. Decisões do utilizador (30/10): 1A (super obrigatório, donos opcional — mas só depois de provada a recuperação), 2A só para o futuro (único super: o atual), 3A (função preparada e testada localmente; publicar só com autorização explícita).
+Estado (02/11/2026): **migração 15 APLICADA e Edge Function `recuperar-totp` PUBLICADA em produção (opção A, autorizada pelo dono).** Falta o segredo `GESTMZ_ORIGENS` (o dono põe-no no painel: Edge Functions → Secrets). Interruptor «MFA obrigatório para o super» **desligado**; só liga depois de a recuperação ser provada num caso real. Nunca validado com o Google Authenticator real.
 
 ## Peças
 | Peça | Ficheiro | Notas |

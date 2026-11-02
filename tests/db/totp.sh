@@ -11,7 +11,8 @@ for m in 05 06 07 08 09; do Q -f "$R"/supabase/migracao_${m}_*.sql >/dev/null 2>
 Q -c "create publication supabase_realtime for table public.produtos, public.lotes, public.vendas" >/dev/null
 Q -f "$D/ajuda.sql" >/dev/null
 Q -f "$R/supabase/migracao_10_inicializacao_segura.sql" >/dev/null || { echo "migração 10 falhou"; exit 3; }
-Q -f "$R/supabase/migracao_12_permissoes_por_papel.sql" >/dev/null || { echo "migração 12 falhou"; exit 3; }
+[ "${GESTMZ_SEM12:-}" = 1 ] || Q -f "$R/supabase/migracao_12_permissoes_por_papel.sql" >/dev/null || { echo "migração 12 falhou"; exit 3; }
+[ "${GESTMZ_COM16:-}" = 1 ] && { Q -f "$R/supabase/migracao_16_stock_fotos_notificacoes_caixa.sql" >/dev/null 2>&1 || { echo "migração 16 falhou"; exit 3; }; }
 Q -f "$R/supabase/migracao_15_totp_recuperacao.sql" >/dev/null || { echo "migração 15 falhou"; exit 3; }
 Q -f "$R/supabase/migracao_15_totp_recuperacao.sql" >/dev/null || { echo "migração 15 falhou na 2.ª execução (idempotência)"; exit 3; }
 Q -c "insert into auth.users(id,email,created_at) values ('00000000-0000-0000-0000-0000000000a0','dono-sistema@teste.local',now()-interval '3 days'); update public.plataforma set inicializacao_aberta=true;" >/dev/null
