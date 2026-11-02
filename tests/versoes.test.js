@@ -129,3 +129,9 @@ test('workflow versao.yml: o APK de teste mostra o seu certificado (informativo,
   assert.ok(ramoTeste.length > 100 && !/\bexit 1\b/.test(ramoTeste), 'o ramo de teste nunca falha por causa do certificado');
   assert.ok(!/KS_PASS|KEYSTORE_PASSWORD|KEY_PASSWORD|KS_B64/.test(ramoTeste), 'não toca em segredos');
 });
+
+test('versao.yml: sem gatilho temporário por push; a candidata só se lança à mão e a Release passa pelo ambiente de aprovação', () => {
+  const y = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '.github', 'workflows', 'versao.yml'), 'utf8');
+  assert.ok(!/^\s*push:/m.test(y) && !y.includes('desenvolvimento/atualizacoes'), 'o gatilho temporário foi removido');
+  assert.ok(/workflow_dispatch:/.test(y) && /environment: aprovacao-release/.test(y) && /--draft/.test(y), 'só rascunho, com aprovação');
+});
