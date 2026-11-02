@@ -24,47 +24,60 @@ async function abrir(b, url, papel) {
   return { ctx, p, erros };
 }
 
-test('legal: ecrã de entrada tem as 3 ligações e cada texto abre; os textos têm o essencial', { skip: !chromium && 'playwright indisponível', timeout: 120000 }, async () => {
+test('legal: o ecrã de entrada não tem ligações legais nem «Contrato»; os dois textos abrem dentro da app e dizem o essencial', { skip: !chromium && 'playwright indisponível', timeout: 120000 }, async () => {
   const s = srv(); await new Promise(r => s.listen(0, r)); const url = 'http://127.0.0.1:' + s.address().port + '/'; const b = await chromium.launch();
   try {
     const { ctx, p, erros } = await abrir(b, url, 'dono');
     assert.strictEqual(await p.locator('#f [name=e]').count(), 1, 'campos de entrada continuam'); assert.strictEqual(await p.locator('#go').count(), 1, 'botão Entrar continua');
-    assert.strictEqual(await p.locator('.legal-links [data-legal]').count(), 3, '3 ligações no ecrã de entrada');
-    for (const [k, titulo, frases] of [['termos', 'Termos de uso', [/Contas e acesso/, /Teste grátis, subscrição e pagamento/, /sem internet/i, /Impostos/]],
-      ['privacidade', 'Política de privacidade', [/não vendemos dados/i, /reconhecimento facial/i, /Supabase/, /Quem vê o quê/, /Os seus direitos/, /Quanto tempo guardamos/]],
-      ['contrato', 'Contrato de subscrição', [/objeto/i, /duração/i, /preço/i, /reembolsos/i, /cessação/i]]]) {
-      await p.click(`.legal-links [data-legal=${k}]`); await p.waitForSelector('.modal .legal');
+    assert.strictEqual(await p.locator('[data-legal]').count(), 0, 'sem ligações legais no ecrã de entrada');
+    assert.ok(!/contrato|termos|privacidade/i.test(await p.locator('#app').innerText()), 'o ecrã de entrada não menciona termos, privacidade nem contrato');
+    await p.evaluate(() => { const m = document.createElement('main'); m.id = 'x'; document.body.appendChild(m); GestLegal.cartaoConta(m); });
+    assert.strictEqual(await p.locator('#x [data-legal]').count(), 2, 'só 2 ligações dentro da app');
+    assert.ok(!/contrato/i.test(await p.locator('#x').innerText()), 'sem «Contrato» no cartão');
+    for (const [k, titulo, frases] of [['termos', 'Termos de utilização', [/Para que serve o GestMZ/, /O seu acesso/, /Os seus deveres/, /sem internet/i, /Dúvidas/]],
+      ['privacidade', 'Política de privacidade', [/Não vendemos dados/i, /Dados tratados e para quê/, /Supabase/, /Segurança/, /Os seus direitos/, /Quanto tempo guardamos/]]]) {
+      await p.click(`#x [data-legal=${k}]`); await p.waitForSelector('.modal .legal');
       const m = await p.locator('.modal').innerText(); assert.ok(m.includes(titulo), titulo); for (const f of frases) assert.ok(f.test(m), titulo + ' deve conter ' + f);
-      assert.ok(!/undefined|\[object|\$\{/.test(m), 'sem marcadores por preencher em ' + titulo);
+      assert.ok(!/undefined|\[object|\$\{|contrato/i.test(m), 'sem marcadores nem «contrato» em ' + titulo); assert.ok(m.length < 6500, titulo + ' é curto'); assert.ok(!/90 dias|reembols/i.test(m), 'sem promessas que o sistema não cumpre');
       await p.click('.modal [data-x]'); assert.strictEqual(await p.locator('.modal').count(), 0);
     }
     assert.deepStrictEqual(erros, []); await ctx.close();
   } finally { await b.close(); s.close(); }
 });
 
-test('legal: o dono tem de aceitar (uma vez por versão); gerente e caixa não são bloqueados', { skip: !chromium && 'playwright indisponível', timeout: 120000 }, async () => {
+test('legal: no primeiro acesso dono, gerente e caixa aceitam uma vez (versão+data); não repete; versão nova volta a pedir; super não é bloqueado', { skip: !chromium && 'playwright indisponível', timeout: 120000 }, async () => {
   const s = srv(); await new Promise(r => s.listen(0, r)); const url = 'http://127.0.0.1:' + s.address().port + '/'; const b = await chromium.launch();
   try {
-    // dono sem aceitação: aparece, não avança sem marcar, aceitar grava versão e data na conta
-    const d = await abrir(b, url, 'dono'); await d.p.evaluate(() => GestLegal.exigirAceitacao()); await d.p.waitForSelector('#legal-gate');
-    assert.ok(await d.p.locator('#lg-ok').isDisabled(), 'sem marcar a caixa não se aceita'); assert.strictEqual(await d.p.evaluate(() => window.__upd.length), 0, 'nada gravado antes de aceitar');
-    await d.p.click('#legal-gate [data-legal=privacidade]'); await d.p.waitForSelector('.modal:not(#legal-gate) .legal'); assert.ok(/Política de privacidade/.test(await d.p.locator('.modal:not(#legal-gate)').innerText()), 'dá para ler os textos antes de aceitar');
-    await d.p.click('.modal:not(#legal-gate) [data-x]'); await d.p.check('#lg-ck'); assert.ok(await d.p.locator('#lg-ok').isEnabled());
-    await d.p.click('#lg-ok'); await d.p.waitForSelector('#legal-gate', { state: 'detached' });
-    const up = await d.p.evaluate(() => window.__upd); assert.strictEqual(up.length, 1); const ver = await d.p.evaluate(() => GestLegal.VERSAO);
-    assert.strictEqual(up[0].data.termos_versao, ver, 'grava a versão aceite'); assert.ok(!isNaN(Date.parse(up[0].data.termos_em)), 'grava a data/hora');
-    // já aceitou esta versão: não volta a pedir
-    await d.p.evaluate(() => GestLegal.exigirAceitacao()); await d.p.waitForTimeout(200); assert.strictEqual(await d.p.locator('#legal-gate').count(), 0, 'não repete'); assert.strictEqual(await d.p.evaluate(() => window.__upd.length), 1);
-    // versão nova: volta a pedir
-    await d.p.evaluate(() => { window.__meta.termos_versao = '2000-01-01'; localStorage.clear(); GestLegal.exigirAceitacao(); }); await d.p.waitForSelector('#legal-gate'); assert.deepStrictEqual(d.erros, []); await d.ctx.close();
-    // gerente e caixa: nada de bloqueio; podem ler no cartão «A minha conta»
-    for (const papel of ['gerente', 'caixa']) {
-      const g = await abrir(b, url, papel); await g.p.evaluate(() => GestLegal.exigirAceitacao()); await g.p.waitForTimeout(200);
-      assert.strictEqual(await g.p.locator('#legal-gate').count(), 0, papel + ' não é bloqueado'); assert.strictEqual(await g.p.evaluate(() => window.__upd.length), 0, papel + ' não grava aceitação');
-      await g.p.evaluate(() => { const m = document.createElement('main'); m.id = 'x'; document.body.appendChild(m); GestLegal.cartaoConta(m); }); assert.strictEqual(await g.p.locator('#x [data-legal]').count(), 3, papel + ' pode ler os textos'); await g.ctx.close();
+    for (const papel of ['dono', 'gerente', 'caixa']) {
+      const d = await abrir(b, url, papel); await d.p.evaluate(() => GestLegal.exigirAceitacao()); await d.p.waitForSelector('#legal-gate');
+      assert.ok(await d.p.locator('#lg-ok').isDisabled(), papel + ': sem marcar não avança'); assert.strictEqual(await d.p.locator('#lg-ok').innerText(), 'Avançar'); assert.strictEqual(await d.p.evaluate(() => window.__upd.length), 0, 'nada gravado antes de aceitar');
+      assert.strictEqual(await d.p.locator('#legal-gate [data-legal]').count(), 2, 'só 2 documentos'); assert.ok(!/contrato/i.test(await d.p.locator('#legal-gate').innerText()));
+      await d.p.click('#legal-gate [data-legal=privacidade]'); await d.p.waitForSelector('.modal:not(#legal-gate) .legal'); assert.ok(/Política de privacidade/.test(await d.p.locator('.modal:not(#legal-gate)').innerText()), 'dá para ler antes de aceitar');
+      await d.p.click('.modal:not(#legal-gate) [data-x]'); await d.p.check('#lg-ck'); assert.ok(await d.p.locator('#lg-ok').isEnabled()); await d.p.click('#lg-ok'); await d.p.waitForSelector('#legal-gate', { state: 'detached' });
+      const up = await d.p.evaluate(() => window.__upd), ver = await d.p.evaluate(() => GestLegal.VERSAO); assert.strictEqual(up.length, 1); assert.strictEqual(up[0].data.termos_versao, ver, 'grava a versão'); assert.ok(!isNaN(Date.parse(up[0].data.termos_em)), 'grava data/hora');
+      await d.p.evaluate(() => GestLegal.exigirAceitacao()); await d.p.waitForTimeout(200); assert.strictEqual(await d.p.locator('#legal-gate').count(), 0, 'não repete'); assert.strictEqual(await d.p.evaluate(() => window.__upd.length), 1);
+      await d.p.evaluate(() => { window.__meta.termos_versao = '2000-01-01'; localStorage.clear(); GestLegal.exigirAceitacao(); }); await d.p.waitForSelector('#legal-gate'); assert.deepStrictEqual(d.erros, []); await d.ctx.close();
     }
-    // administrador do sistema: sem cartão nem bloqueio
+    // quem já aceitou esta versão (consentimento existente) não é bloqueado
+    const j = await abrir(b, url, 'caixa'); await j.p.evaluate(() => { window.__meta.termos_versao = GestLegal.VERSAO; return GestLegal.exigirAceitacao(); }); await j.p.waitForTimeout(200);
+    assert.strictEqual(await j.p.locator('#legal-gate').count(), 0, 'consentimento existente respeitado'); assert.strictEqual(await j.p.evaluate(() => window.__upd.length), 0); await j.ctx.close();
     const su = await abrir(b, url, 'super'); await su.p.evaluate(() => GestLegal.exigirAceitacao()); await su.p.waitForTimeout(150); assert.strictEqual(await su.p.locator('#legal-gate').count(), 0); await su.ctx.close();
+  } finally { await b.close(); s.close(); }
+});
+
+test('ajuda: cada cargo vê só o que existe para si; sem instruções antigas nem «contrato»', { skip: !chromium && 'playwright indisponível', timeout: 120000 }, async () => {
+  const s = srv(); await new Promise(r => s.listen(0, r)); const url = 'http://127.0.0.1:' + s.address().port + '/'; const b = await chromium.launch();
+  try {
+    const textos = {};
+    for (const papel of ['dono', 'gerente', 'caixa']) {
+      const { ctx, p, erros } = await abrir(b, url, papel);
+      textos[papel] = await p.evaluate(async () => { const m = document.createElement('main'); m.id = 'main'; document.body.appendChild(m); await VIEWS.ajuda(); const faq = m.innerText; VIEWS.ajudaSlides(); const all = []; for (let i = 0; i < 40; i++) { const sl = document.querySelector('.slide'); if (sl) all.push(sl.innerText); const nx = document.querySelector('#nx'); if (!nx || nx.textContent === 'Concluir') break; nx.click(); } return faq + '\n' + all.join('\n'); });
+      assert.deepStrictEqual(erros, []); await ctx.close();
+    }
+    for (const [papel, t] of Object.entries(textos)) { assert.ok(!/contrato/i.test(t), papel); assert.ok(!/Sim, para vender e actualizar|só são guardadas com ligação|inventado por si no campo|Registo”|retirar um produto da venda ou anular/.test(t), papel + ': sem instruções antigas'); assert.ok(/sem internet/i.test(t), papel + ' explica o trabalho sem internet'); }
+    assert.ok(/Fechos de caixa/.test(textos.dono) && /Despesas e relatórios/.test(textos.dono) && /Subscrição/.test(textos.dono) && /Equipa/.test(textos.dono));
+    assert.ok(!/Despesas e relatórios|Subscrição|Fechos de caixa/.test(textos.gerente), 'o gerente não vê guias de despesas, subscrição nem fechos do dono'); assert.ok(/Fechar o caixa/.test(textos.gerente) && /gerir os caixas/.test(textos.gerente));
+    assert.ok(!/Despesas|Subscrição|Equipa|Relatórios|Entrada de stock|Avisos \(sino\)/.test(textos.caixa), 'o caixa só vê o que usa'); assert.ok(/Fechar o caixa/.test(textos.caixa) && /Vender/.test(textos.caixa));
   } finally { await b.close(); s.close(); }
 });
 

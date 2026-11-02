@@ -230,41 +230,54 @@ VIEWS.suporte = async function () {
 };
 
 /* ======================= AJUDA ======================= */
+/* Cada item diz a que cargos se aplica (d = dono, g = gerente, c = caixa). Só descreve o que a aplicação faz hoje. */
 const SLIDES = [
-  ['painel', 'Bem-vindo ao GestMZ', 'Vendas, stock, validades, equipa e assinatura num só lugar. Funciona no telemóvel e no computador, e todos os aparelhos da loja veem os mesmos dados.'],
-  ['vender', 'Vender é rápido', 'Passe o leitor de código de barras e o produto entra na venda. Escolha como o cliente paga (dinheiro, M-Pesa, e-Mola, mKesh…), finalize e imprima o recibo. No telemóvel, use o botão da câmara para ler o código.'],
-  ['produtos', 'Produtos e categorias', 'Ao registar um produto, escolha a categoria numa lista (bebidas, cereais, higiene, cosméticos, papelaria, medicamentos…). Falta uma? Crie uma nova na hora, sem sair do ecrã.'],
-  ['barcode', 'Embalagem e unidade', 'Registe o produto uma só vez. Exemplo: o sabonete vem em caixas de 20. Indique o código da caixa, o código da unidade, o custo e o preço da caixa e o preço de cada unidade. Ler a caixa vende a caixa inteira (e baixa 20 do stock); ler a unidade vende 1. O stock conta-se sempre em unidades, por isso nunca há stock duplicado.'],
-  ['registo', 'Stock e validades', 'Cada entrada tem lote e validade. O sistema vende primeiro o que expira primeiro e nunca vende lotes expirados. O painel avisa o que está a acabar e o que está para expirar.'],
-  ['equipa', 'Equipa com perfil e foto', 'O dono cria gerentes e caixas com e-mail, senha, foto e um código de acesso. Ao entrar, o funcionário vê o seu nome e foto e digita o código. Cada cargo vê só o que lhe cabe: o caixa só as suas vendas, o gerente também a equipa de caixas, e o dono vê tudo da loja.'],
-  ['sair', 'O caixa não apaga nada sozinho', 'Para retirar um produto da venda ou anular uma venda, o caixa precisa que o gerente escreva o seu e-mail e senha. Tudo fica registado em “Registo”, com data e nome.'],
-  ['clientes', 'Fiado e clientes', 'Registe o cliente e venda a fiado. A dívida fica guardada e, quando ele pagar, use “Receber”. O dono vê o total em dívida no painel.'],
-  ['assinatura', 'Assinatura', 'Pague por e-Mola, M-Pesa ou mKesh para o número indicado, envie a foto do comprovativo em “Assinatura” e espere a confirmação. Quando confirmada, a validade actualiza sozinha.'],
-  ['check', 'Pronto para começar', 'Comece por registar alguns produtos. Se precisar de rever este guia, abra “Ajuda” no menu. Boas vendas!']
+  ['painel', 'd,g,c', 'Bem-vindo ao GestMZ', 'O GestMZ regista vendas, stock e validades, clientes, caixa e relatórios da loja. O menu mostra só o que o seu cargo pode usar. Todos os aparelhos da loja veem os mesmos dados.'],
+  ['vender', 'd,g,c', 'Vender', 'Em «Vender», leia o código de barras (leitor ou câmara) ou pesquise pelo nome, escolha como o cliente paga e finalize; o recibo pode ser mostrado ou impresso. Pode retirar artigos ou diminuir quantidades enquanto a venda não está finalizada. Para vender a fiado, escolha o cliente.'],
+  ['vendas', 'd,g,c', 'Vendas e anulações', 'Em «Vendas» vê as vendas do dia (o caixa vê só as suas). Anular uma venda já finalizada pede a autorização do gerente ou do dono, e fica registada. O stock volta ao lote de origem.'],
+  ['caixa', 'g,c', 'Fechar o caixa', 'No fim do turno, abra «Fechar caixa»: vê o resumo calculado pelo sistema, conta o dinheiro, escreve o valor contado e confirma. O sistema mostra a diferença (falta ou excesso). Depois de confirmado não se altera; só o dono pode reabrir o último fecho.'],
+  ['caixa', 'd', 'Fechos de caixa', 'Em «Fechos de caixa» vê o histórico de fechos de cada funcionário, com a diferença registada. Só o dono pode reabrir o último fecho de um funcionário, indicando o motivo; o original fica guardado.'],
+  ['produtos', 'd,g', 'Produtos e categorias', 'Registe cada produto uma só vez: nome, categoria (escolha da lista ou crie uma nova), preços e, se vender em caixa e unidade, quantas unidades tem a caixa e o código de cada uma. O stock conta-se sempre em unidades. Só o dono define o limite de stock baixo e a fotografia do produto.'],
+  ['produtos', 'c', 'Produtos', 'Em «Produtos» vê os produtos com stock disponível e o preço. Produtos sem stock não aparecem na lista de venda. Não vê custos nem quantidades.'],
+  ['registo', 'd,g', 'Stock e validades', 'Cada entrada de stock tem lote e validade. O sistema vende primeiro o que expira primeiro e não vende lotes expirados. O painel avisa o que está a acabar e o que está perto de expirar. Use «Entrada de stock» para repor.'],
+  ['clientes', 'd,g,c', 'Clientes e fiado', 'Registe o cliente (nome e telefone) e venda a fiado. A dívida fica guardada; quando o cliente pagar, use «Receber» na sua ficha.'],
+  ['despesas', 'd', 'Despesas e relatórios', 'Em «Despesas» regista os gastos da loja. Em «Relatórios» escolhe um período e vê vendas, custos e lucro. Só o dono vê despesas e lucros.'],
+  ['relatorios', 'g', 'Relatórios', 'Em «Relatórios» escolhe um período e vê as vendas. Custos, despesas e lucros são só do dono.'],
+  ['equipa', 'd', 'Equipa', 'Em «Equipa» cria gerentes e caixas (e-mail, senha, foto e código de acesso) e retira o acesso a quem sair. Ao entrar, o funcionário usa o seu código de acesso.'],
+  ['equipa', 'g', 'Equipa', 'Em «Equipa» vê a equipa e pode gerir os caixas (criar e retirar o acesso). Os outros gerentes e o dono só o dono altera.'],
+  ['assinatura', 'd', 'Subscrição', 'Em «Assinatura» escolhe o plano, paga por transferência móvel para o número indicado, envia a foto do comprovativo e aguarda a confirmação; a validade atualiza-se quando for confirmada. Sem subscrição válida só pode consultar os dados.'],
+  ['painel', 'd,g', 'Avisos (sino)', 'O sino mostra avisos: vendas, stock baixo ou a zero, vendas anuladas. O dono recebe também o aviso de caixa fechado ou reaberto. Toque para marcar como lido.'],
+  ['sair', 'd,g,c', 'Sem internet', 'Pode vender sem internet: a venda fica guardada neste aparelho e segue sozinha quando a ligação voltar. Não desinstale a aplicação com vendas por enviar. Em «Conta» pode guardar uma cópia das vendas pendentes.'],
+  ['conta', 'd,g,c', 'A sua conta', 'Em «Conta» muda a senha e vê os Termos e a Política de privacidade. O dono pode ativar o Google Autenticador para proteger a entrada, e guarda os códigos de recuperação num sítio seguro.'],
+  ['check', 'd,g,c', 'Dúvidas?', 'Volte a esta página sempre que precisar. O dono pode escrever ao Suporte; os funcionários falam com o dono da loja.']
 ];
+const slidesDoPerfil = () => SLIDES.filter(s => s[1].split(',').includes({ dono: 'd', gerente: 'g', caixa: 'c' }[S.perfil.papel] || 'x')).map(s => [s[0], s[2], s[3]]);
 VIEWS.ajudaSlides = function () {
-  let i = 0;
+  let i = 0; const SL = slidesDoPerfil();
   const w = modal('Como funciona', '<div class="slides" id="sl"></div><div class="dots" id="dots"></div>', {});
   const f = $('.mf', w.m); f.innerHTML = '<button type="button" class="btn ghost" id="pv">Anterior</button><button type="button" class="btn" id="nx">Seguinte</button>';
   const draw = () => {
-    const s = SLIDES[i];
+    const s = SL[i];
     $('#sl', w.m).innerHTML = `<div class="slide"><div class="big">${ico(s[0], 38)}</div><h3>${esc(s[1])}</h3><p>${esc(s[2])}</p></div>`;
-    $('#dots', w.m).innerHTML = SLIDES.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
-    $('#pv', w.m).disabled = i === 0; $('#nx', w.m).textContent = i === SLIDES.length - 1 ? 'Concluir' : 'Seguinte';
+    $('#dots', w.m).innerHTML = SL.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
+    $('#pv', w.m).disabled = i === 0; $('#nx', w.m).textContent = i === SL.length - 1 ? 'Concluir' : 'Seguinte';
   };
   $('#pv', w.m).onclick = () => { if (i > 0) { i--; draw(); } };
-  $('#nx', w.m).onclick = () => { if (i < SLIDES.length - 1) { i++; draw(); } else w.close(); };
+  $('#nx', w.m).onclick = () => { if (i < SL.length - 1) { i++; draw(); } else w.close(); };
   draw();
 };
 VIEWS.ajuda = async function () {
+  const papel = S.perfil.papel, dono = papel === 'dono';
   const faq = [
-    ['O leitor de código de barras precisa de instalação?', 'Não. A maioria dos leitores USB ou Bluetooth funciona como um teclado: ao ler, escreve o número e carrega em Enter. Basta o cursor estar na caixa de pesquisa do ecrã “Vender”.'],
-    ['E se o produto não tiver código de barras?', 'Pesquise pelo nome e toque no produto. Pode também usar um código inventado por si no campo de código do produto.'],
-    ['Posso usar em vários caixas ao mesmo tempo?', 'Sim. Cada caixa entra com o seu utilizador, e o stock actualiza em todos os aparelhos.'],
-    ['Preciso de internet?', 'Sim, para vender e actualizar o stock em todos os caixas. A app abre sem internet, mas as vendas só são guardadas com ligação.'],
-    ['Um funcionário esqueceu a senha. E agora?', 'O funcionário pode mudar a senha em “Conta” enquanto estiver com sessão aberta. Se já perdeu o acesso, retire o acesso na “Equipa” e crie um novo utilizador.'],
-    ['Como instalo no telemóvel?', 'Abra o endereço no Chrome, toque nos três pontos e escolha “Instalar aplicação” ou “Adicionar ao ecrã inicial”. Fica com um ícone como qualquer outra app.']
+    ['Preciso de internet?', 'Para entrar e para ver os dados atuais, sim. Para vender pode trabalhar sem internet: a venda fica guardada no aparelho e segue sozinha quando a ligação voltar (o indicador de vendas por enviar mostra o que falta). Entre uma vez com internet antes de trabalhar sem ligação.'],
+    ['O leitor de código de barras precisa de instalação?', 'Não. A maioria dos leitores USB ou Bluetooth funciona como um teclado: ao ler, escreve o número e carrega em Enter, com o cursor na pesquisa de «Vender». No telemóvel também pode usar a câmara.'],
+    ['E se o produto não tiver código de barras?', 'Pesquise pelo nome e toque no produto.' + (papel === 'caixa' ? '' : ' Ao registar o produto pode também usar um código inventado por si.')],
+    ['Um produto não aparece na venda.', 'Só aparecem produtos com stock disponível (e não expirado). Peça ao gerente ou ao dono para repor o stock.'],
+    ['Posso usar em vários caixas ao mesmo tempo?', 'Sim. Cada pessoa entra com o seu utilizador e o stock atualiza em todos os aparelhos.'],
+    ['Preciso de autorização para retirar um artigo da venda?', 'Não. Retirar artigos e diminuir quantidades enquanto a venda não está finalizada é livre. Anular uma venda já finalizada pede a autorização do gerente ou do dono.'],
+    ['Como altero a minha senha?', 'Em «Conta», com a sessão aberta.' + (dono ? ' Se perder o acesso, peça ajuda ao Suporte.' : ' Se perder o acesso, peça ao dono da loja ou ao gerente para retirar o acesso e criar um novo utilizador.')]
   ];
-  $('#main').innerHTML = `<div class="bar"><h2>Ajuda</h2><button class="btn" id="sl">Ver apresentação passo a passo</button></div><div class="cols">${faq.map(f => `<div class="card"><h3>${esc(f[0])}</h3><p style="margin:0">${esc(f[1])}</p></div>`).join('')}</div>`;
+  if (papel !== 'caixa') faq.push(['Como instalo no telemóvel?', 'Abra o endereço no Chrome, toque nos três pontos e escolha «Instalar aplicação» ou «Adicionar ao ecrã inicial». Na versão Android (APK), abra o ficheiro e permita a instalação quando o telemóvel pedir.']);
+  $('#main').innerHTML = `<div class="bar"><h2>Ajuda</h2><button class="btn" id="sl">Guia passo a passo</button></div><div class="cols">${faq.map(f => `<div class="card"><h3>${esc(f[0])}</h3><p style="margin:0">${esc(f[1])}</p></div>`).join('')}</div>`;
   $('#sl').onclick = VIEWS.ajudaSlides;
 };
