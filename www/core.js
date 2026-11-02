@@ -25,7 +25,10 @@ const ICONS = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   check: '<path d="M5 12l5 5 9-10"/>',
   barcode: '<path d="M4 5v14M7 5v14M11 5v14M14 5v14M18 5v14M20 5v14"/>',
-  warn: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>'
+  warn: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
+  sino: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
+  caixa: '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V5h8v5M8 15h8"/>',
+  foto: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/>'
 };
 const ico = (n, s = 20) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 const logo = (s = 36) => `<svg width="${s}" height="${s}" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="12" fill="#F4B400"/><rect x="10" y="26" width="7" height="12" rx="2" fill="#00453A"/><rect x="20.5" y="18" width="7" height="20" rx="2" fill="#00453A"/><rect x="31" y="9" width="7" height="29" rx="2" fill="#00453A"/></svg>`;
@@ -65,6 +68,7 @@ function traduz(m) {
     [/duplicate key.*codigo/i, 'Já existe um produto com este código de barras.'],
     [/duplicate key/i, 'Já existe um registo igual.'],
     [/email rate limit|rate limit/i, 'Demasiados pedidos. Espere um minuto e tente de novo.'],
+    [/MFA_NECESSARIO/, 'Confirme com o código do autenticador (Google Authenticator): saia e entre de novo, escrevendo o código.'],
     [/JWT expired/i, 'A sessão expirou. Entre de novo.']
   ];
   for (const [re, txt] of t) if (re.test(m)) return txt;
@@ -118,6 +122,16 @@ function ask(msg, fn, txt, danger) { return modal('Confirmar', `<p>${esc(msg)}</
 const fld = (l, n, v, t, x, hint) => `<label>${l}<input class="in" name="${n}" type="${t || 'text'}" value="${esc(v == null ? '' : v)}" ${x || ''}>${hint ? `<span class="hint">${hint}</span>` : ''}</label>`;
 const opts = (arr, sel) => arr.map(a => { const v = Array.isArray(a) ? a[0] : a, t = Array.isArray(a) ? a[1] : a; return `<option value="${esc(v)}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(t)}</option>`; }).join('');
 async function download(name, text, type) {
+  /* aplicação Android (APK): a WebView não descarrega ficheiros por ligação; grava na cache da app e abre a folha de partilha do Android
+     (guardar no Drive, enviar por WhatsApp/e-mail…), como já se faz com os recibos. Sem isto, a cópia das vendas pendentes não sairia do aparelho. */
+  try {
+    const C = window.Capacitor, P = (C && C.Plugins) || {};
+    if (C && C.isNativePlatform && C.isNativePlatform() && P.Filesystem && P.Share) {
+      const r = await P.Filesystem.writeFile({ path: name, data: String(text), directory: 'CACHE', encoding: 'utf8' });
+      await P.Share.share({ title: name, url: r.uri, dialogTitle: 'Guardar ou enviar «' + name + '»' });
+      return;
+    }
+  } catch (e) { if (e && /cancel/i.test(String(e.name) + String(e.message))) return; throw new Error('Não foi possível guardar o ficheiro neste aparelho: ' + ((e && e.message) || e)); }
   const blob = new Blob([text], { type: type || 'text/plain' });
   try {
     const f = new File([blob], name, { type: type || 'text/plain' });
@@ -208,12 +222,21 @@ function vErro(msg) {
   authShell(`<h2>Algo correu mal</h2><div class="msg bad">${esc(msg)}</div><button class="btn block" id="t">Tentar de novo</button><button class="link" id="s">Sair</button>`);
   $('#t').onclick = () => entrar(); $('#s').onclick = sair;
 }
+// Estado da configuração inicial, decidido SÓ pelo servidor. Falha fechada: qualquer dúvida (sem Internet, erro, resposta
+// inesperada) devolve 'desconhecido' e a opção de criar o dono do sistema NÃO é mostrada nem executada.
+async function estadoInicializacao() {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'desconhecido';
+    const { data, error } = await sb.rpc('estado_inicializacao');
+    if (error) return 'desconhecido';
+    return data === 'aberta' ? 'aberta' : data === 'fechada' ? 'fechada' : 'desconhecido';
+  } catch (e) { return 'desconhecido'; }
+}
 async function vLogin(msg) {
-  let temSuper = true; try { const { data } = await sb.rpc('existe_super'); temSuper = !!data; } catch (e) { /* offline */ }
+  const temSuper = (await estadoInicializacao()) !== 'aberta';   // true = esconder a opção (fechada ou desconhecido)
   authShell(`<h2>Entrar</h2>${msg ? `<div class="msg">${esc(msg)}</div>` : ''}
     <form id="f">${fld('E-mail', 'e', lsGet('gestmz_email') || '', 'email', 'required autocapitalize="none" autocomplete="username" inputmode="email"')}${fld('Senha', 'p', '', 'password', 'required autocomplete="current-password"')}
     <button class="btn block" id="go">Entrar</button></form>
-    <p class="muted small" style="text-align:center;margin:16px 0 0">O acesso é dado pelo administrador do GestMZ (lojas) ou pelo dono da loja (funcionários).</p>
     ${!temSuper ? '<div style="margin-top:10px;text-align:center"><button class="link" id="sup">Configurar o dono do sistema</button></div>' : ''}`);
   $('#f').onsubmit = async e => {
     e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)), b = $('#go'); b.disabled = true; b.textContent = 'A entrar…';
@@ -267,7 +290,12 @@ function vConfigurarLoja(perfil, loja) {
     } catch (err) { erro(err); b.disabled = false; b.textContent = 'Guardar e entrar'; }
   };
 }
-function vSetupSuper() {
+async function vSetupSuper() {
+  // Confirma de novo no servidor ANTES de mostrar o formulário (e antes de qualquer registo).
+  if ((await estadoInicializacao()) !== 'aberta') {
+    authShell(`<h2>Configuração indisponível</h2><div class="msg">A configuração inicial não está disponível neste momento. Se for o administrador, contacte o suporte do GestMZ.</div><button class="btn block" id="v">Voltar</button>`);
+    $('#v').onclick = () => vLogin(); return;
+  }
   authShell(`<h2>Dono do sistema</h2><p class="muted">Esta conta controla todas as lojas, confirma pagamentos e define os preços. Só pode ser criada uma vez.</p>
     <form id="f">${fld('O seu nome', 'nome', '', 'text', 'required')}${fld('E-mail', 'email', '', 'email', 'required autocapitalize="none"')}${fld('Senha (mínimo 6 caracteres)', 'senha', '', 'password', 'required minlength="6"')}
     <button class="btn block" id="go">Criar conta do dono do sistema</button></form><div style="text-align:center;margin-top:8px"><button class="link" id="v">Voltar</button></div>`);
@@ -275,6 +303,7 @@ function vSetupSuper() {
   $('#f').onsubmit = async e => {
     e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)), b = $('#go'); b.disabled = true;
     try {
+      if ((await estadoInicializacao()) !== 'aberta') throw new Error('A configuração inicial não está disponível neste momento.');
       const { data, error } = await sb.auth.signUp({ email: d.email.trim(), password: d.senha });
       if (error) throw new Error(traduz(error.message));
       if (!data.session) throw new Error('Precisa de desligar "Confirm email" no Supabase (veja o LEIA-ME).');
@@ -303,6 +332,7 @@ async function boot() {
 async function entrar() {
   try {
     const { data } = await sb.auth.getSession(); if (!data.session) return vLogin();
+    if (window.GestTOTP && await GestTOTP.precisaDesafio()) return GestTOTP.vDesafio(entrar);   // conta com autenticador: pede o código antes de abrir os dados
     const r = await q(sb.from('perfis').select('*').eq('id', data.session.user.id));
     const perfil = r[0];
     if (!perfil) return vSemAcesso();
@@ -314,17 +344,17 @@ async function entrar() {
       if (!lb) return vSemAcesso();
       return vPin(perfil, lb);
     }
-    const lj = (await q(sb.from('lojas').select('*').eq('id', perfil.loja_id)))[0];
+    const lj = await lerLojaInfo(perfil.loja_id);
     if (!lj) return vSemAcesso();
     if (perfil.papel === 'dono' && lj.configurada === false) return vConfigurarLoja(perfil, lj);
-    await carregarLoja(); S.offline = false; shell(navLoja()); iniciarRT(); go(perfil.papel === 'caixa' ? 'pdv' : 'painel'); primeiraAjuda(); sincronizarFila(); netUpdate();
+    await carregarLoja(); S.offline = false; shell(navLoja()); iniciarRT(); go(perfil.papel === 'caixa' ? 'pdv' : 'painel'); primeiraAjuda(); sincronizarFila(); netUpdate(); if (window.GestLegal) GestLegal.exigirAceitacao();
   } catch (e) { if (ehRede(e) && jGet('gestmz_cache', null)) return entrarOffline(); vErro(e.message); }
 }
 
 /* ---------- estrutura ---------- */
 const NAV_LOJA = [
-  ['painel', 'painel', 'Painel', 'dono,gerente'], ['pdv', 'vender', 'Vender', 'dono,gerente,caixa'], ['vendas', 'vendas', 'Vendas', 'dono,gerente,caixa'],
-  ['produtos', 'produtos', 'Produtos', 'dono,gerente,caixa'], ['clientes', 'clientes', 'Clientes', 'dono,gerente,caixa'], ['despesas', 'despesas', 'Despesas', 'dono,gerente'],
+  ['painel', 'painel', 'Painel', 'dono,gerente'], ['pdv', 'vender', 'Vender', 'dono,gerente,caixa'], ['vendas', 'vendas', 'Vendas', 'dono,gerente,caixa'], ['fecho', 'caixa', 'Fechar caixa', 'gerente,caixa'], ['fechos', 'caixa', 'Fechos de caixa', 'dono'],
+  ['produtos', 'produtos', 'Produtos', 'dono,gerente,caixa'], ['clientes', 'clientes', 'Clientes', 'dono,gerente,caixa'], ['despesas', 'despesas', 'Despesas', 'dono'],
   ['relatorios', 'relatorios', 'Relatórios', 'dono,gerente'], ['equipa', 'equipa', 'Equipa', 'dono,gerente'], ['assinatura', 'assinatura', 'Assinatura', 'dono'],
   ['registo', 'registo', 'Registo', 'dono,gerente'], ['suporte', 'ajuda', 'Suporte', 'dono'], ['ajuda', 'ajuda', 'Ajuda', 'dono,gerente,caixa'], ['perfil', 'conta', 'Conta', 'dono,gerente,caixa'], ['sair', 'sair', 'Sair', 'dono,gerente,caixa']
 ];
@@ -332,13 +362,14 @@ const navLoja = () => NAV_LOJA.filter(n => n[3].split(',').includes(S.perfil.pap
 const navSuper = () => [['s_lojas', 'lojas', 'Lojas'], ['s_pagamentos', 'assinatura', 'Pagamentos'], ['s_suporte', 'ajuda', 'Suporte'], ['s_config', 'conta', 'Preços e conta'], ['perfil', 'registo', 'Senha'], ['sair', 'sair', 'Sair']];
 function shell(items) {
   const sub = S.loja ? S.loja.nome : 'Dono do sistema';
-  $('#app').innerHTML = `<div class="shell"><aside class="side"><div class="brandrow">${logo(34)}<div><b>GestMZ</b><small>${esc(sub)}</small></div></div><nav id="nav" aria-label="Menu principal"></nav><div class="me">${avatar(S.perfil)}<div><b>${esc(S.perfil.nome)}</b><span>${PAPEL[S.perfil.papel]}</span></div></div></aside><div style="flex:1;min-width:0"><div id="banner"></div><main id="main"></main></div></div>`;
+  $('#app').innerHTML = `<div class="shell"><aside class="side"><div class="brandrow">${logo(34)}<div><b>GestMZ</b><small>${esc(sub)}</small></div></div><nav id="nav" aria-label="Menu principal"></nav><div class="me">${avatar(S.perfil)}<div><b>${esc(S.perfil.nome)}</b><span>${PAPEL[S.perfil.papel]}</span></div></div></aside><div style="flex:1;min-width:0"><div id="banner"></div><div id="topline"></div><main id="main"></main></div></div>`;
   $('#nav').innerHTML = items.map(n => `<button data-v="${n[0]}">${ico(n[1])}<span>${n[2]}</span><span class="badge" hidden></span></button>`).join('');
   $('#nav').onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'sair') return sair(); go(b.dataset.v); };
-  banner();
+  banner(); if (typeof montarTopo === 'function') montarTopo();
 }
 async function go(v, silencioso) {
   cur = v; $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  const ativo = $('#nav button.on'); if (ativo && ativo.scrollIntoView) { try { ativo.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ok */ } }
   if (!silencioso) { $('#main').innerHTML = '<div class="loading">A carregar…</div>'; }
   try { await VIEWS[v](); } catch (e) { $('#main').innerHTML = `<div class="card"><div class="msg bad">${esc(e.message)}</div><button class="btn" onclick="go('${v}')">Tentar de novo</button></div>`; }
   if (!silencioso) window.scrollTo(0, 0);
@@ -346,45 +377,83 @@ async function go(v, silencioso) {
 function badge(v, n) { const b = $(`#nav button[data-v="${v}"] .badge`); if (b) { b.hidden = !n; b.textContent = n; } }
 
 /* ---------- dados da loja ---------- */
+/* Permissões por papel. A interface só mostra o que o papel pode ver; quem garante é o servidor (migração 12).
+   caixa: sem stock/lotes/custos/plano · gerente: sem custos/lucro/plano · dono: tudo da sua loja. */
+const veStock = () => !!S.perfil && S.perfil.papel !== 'caixa';
+const veCustos = () => !!S.perfil && S.perfil.papel === 'dono';   // custos, lucro e despesas: só o dono
+const veDespesas = veCustos;
+const vePlano = () => !!S.perfil && S.perfil.papel === 'dono';
+const SEM_LIMITE = 1e9;   // o caixa não sabe o stock: o servidor decide e recusa se não houver
+const semFuncao = e => /Could not find the function|schema cache/i.test(String((e && e.message) || e || ''));
+/* Lê uma lista pela função do servidor; se a função ainda não existe (migração por aplicar), usa a leitura direta antiga. */
+async function lerLista(fn, args, alt, ordem) {
+  try { return await all(() => { const b = sb.rpc(fn, args); return ordem ? b.order(ordem[0], ordem[1]) : b; }); }
+  catch (e) { if (!semFuncao(e)) throw e; return await all(alt); }
+}
+const lerProdutosGeral = () => lerLista('produtos_loja', { p_so_ativos: true }, () => sb.from('produtos').select('*').eq('ativo', true).order('nome'), ['nome', { ascending: true }]);
+/* Caixa: o servidor só devolve produtos com stock para vender (sem custos, mínimos, lotes nem validades). Servidor sem a função (migração 16 por aplicar): leitura antiga. */
+async function lerProdutos() {
+  if (!S.perfil || S.perfil.papel !== 'caixa') return lerProdutosGeral();
+  try { return await all(() => sb.rpc('produtos_venda').order('nome', { ascending: true })); }
+  catch (e) { if (!semFuncao(e)) throw e; return lerProdutosGeral(); }
+}
+const lerLotes = async () => veStock() ? lerLista('lotes_loja', {}, () => sb.from('lotes').select('*').gt('qtd', 0)) : [];
+const lerVendas = (desde, ate) => lerLista('vendas_loja', { p_desde: desde || null, p_ate: ate || null },
+  () => { let b = sb.from('vendas').select('*'); if (desde) b = b.gte('data', desde); if (ate) b = b.lt('data', ate); return b.order('data', { ascending: false }); }, ['data', { ascending: false }]);
+async function lerLojaInfo(id) {
+  const { data, error } = await sb.rpc('minha_loja_info');
+  if (error) { if (semFuncao(error)) return (await q(sb.from('lojas').select('*').eq('id', id)))[0]; throw new Error(traduz(error.message)); }
+  return data;
+}
 async function carregarLoja() {
   const id = S.perfil.loja_id;
   const [lj, pl, cats, prods, lotes, cli, eq] = await Promise.all([
-    q(sb.from('lojas').select('*').eq('id', id)), q(sb.from('plataforma').select('*')),
+    lerLojaInfo(id), vePlano() ? q(sb.from('plataforma').select('*')) : Promise.resolve([]),
     all(() => sb.from('categorias').select('*').order('nome')),
-    all(() => sb.from('produtos').select('*').eq('ativo', true).order('nome')),
-    all(() => sb.from('lotes').select('*').gt('qtd', 0)),
+    lerProdutos(), lerLotes(),
     all(() => sb.from('clientes').select('*').order('nome')),
     all(() => sb.from('perfis').select('id,nome,usuario,papel,foto,ativo,ultimo_acesso').eq('loja_id', id).order('nome'))
   ]);
-  S.loja = lj[0]; S.plat = pl[0]; S.cats = cats; S.clientes = cli; S.equipa = eq;
+  S.loja = lj; S.plat = pl[0] || null; S.cats = cats; S.clientes = cli; S.equipa = eq;
   S.produtos = juntar(prods, lotes); guardarCache();
 }
 const juntar = (prods, lotes) => prods.map(p => ({ ...p, lotes: lotes.filter(l => l.produto_id === p.id) }));
 async function recarregarProdutos() {
-  const [prods, lotes] = await Promise.all([all(() => sb.from('produtos').select('*').eq('ativo', true).order('nome')), all(() => sb.from('lotes').select('*').gt('qtd', 0))]);
+  const [prods, lotes] = await Promise.all([lerProdutos(), lerLotes()]);
   S.produtos = juntar(prods, lotes); guardarCache();
 }
-async function recarregarLoja() { const r = await q(sb.from('lojas').select('*').eq('id', S.perfil.loja_id)); S.loja = r[0]; banner(); }
+async function recarregarLoja() { S.loja = await lerLojaInfo(S.perfil.loja_id); banner(); }
 const prodById = id => S.produtos.find(p => p.id === id);
-const estoque = p => p.lotes.reduce((a, l) => a + l.qtd, 0);
+const estoque = p => veStock() ? p.lotes.reduce((a, l) => a + l.qtd, 0) : SEM_LIMITE;
 /* stock por caixas fechadas e unidades soltas (lotes.soltas = unidades soltas; o resto está em caixas fechadas) */
 const soltasDe = (p, l) => p.un_por_caixa ? Math.min(l.qtd, l.soltas == null ? l.qtd % p.un_por_caixa : l.soltas) : l.qtd;
 const naValidade = l => !l.validade || diasPara(l.validade) >= 0;
 const soltasP = p => p.lotes.reduce((a, l) => a + soltasDe(p, l), 0);
 const caixasP = p => p.un_por_caixa ? p.lotes.reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
-const caixasVend = p => p.un_por_caixa ? p.lotes.filter(naValidade).reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
+const caixasVend = p => !veStock() ? (p.disp_cx != null ? +p.disp_cx : SEM_LIMITE) : p.un_por_caixa ? p.lotes.filter(naValidade).reduce((a, l) => a + Math.floor((l.qtd - soltasDe(p, l)) / p.un_por_caixa), 0) : 0;
 const stockTxt = p => p.un_por_caixa ? `${caixasP(p)} ${(p.embalagem || 'caixa').toLowerCase()}(s) fechada(s) + ${soltasP(p)} solta(s)` : '';
-const vendavel = p => p.lotes.filter(l => !l.validade || diasPara(l.validade) >= 0).reduce((a, l) => a + l.qtd, 0);
+const vendavel = p => !veStock() ? (p.disp_un != null ? +p.disp_un : SEM_LIMITE) : p.lotes.filter(l => !l.validade || diasPara(l.validade) >= 0).reduce((a, l) => a + l.qtd, 0);
 const proxVal = p => { const ls = p.lotes.filter(l => l.validade).sort((a, b) => a.validade.localeCompare(b.validade)); return ls[0] ? ls[0].validade : ''; };
 function estado(p) {
+  if (!veStock()) return 'ok';
   const ls = p.lotes.filter(l => l.validade);
   if (ls.some(l => diasPara(l.validade) < 0)) return 'expirado';
   if (ls.some(l => diasPara(l.validade) <= 90)) return 'expira';
   const e = estoque(p); if (e <= 0) return 'sem'; if (e <= p.minimo) return 'baixo'; return 'ok';
 }
 const ESTADO_TXT = { ok: 'Em ordem', baixo: 'Stock baixo', expira: 'A expirar', expirado: 'Expirado', sem: 'Sem stock' };
+const MSG_INDISPONIVEL = 'A loja está temporariamente indisponível para vendas. Fale com o dono da loja.';
 function assin() {
-  const l = S.loja, d = diasPara(l.valido_ate);
+  const a = assinInterna();
+  // gerente e caixa só sabem se a loja pode operar; nunca o plano, o período de teste, a validade nem o estado de pagamento
+  if (!vePlano()) return { k: a.ok ? 'ativa' : 'indisponivel', ok: a.ok, d: 0, txt: a.ok ? '' : MSG_INDISPONIVEL };
+  return a;
+}
+function assinInterna() {
+  const l = S.loja;
+  if (l.operacional === false && l.valido_ate === undefined) return { k: 'indisponivel', ok: false, d: 0, txt: MSG_INDISPONIVEL };   // servidor novo: sem datas para não-donos
+  if (l.valido_ate === undefined) return { k: 'ativa', ok: true, d: 999, txt: '' };
+  const d = diasPara(l.valido_ate);
   if (l.estado === 'suspensa') return { k: 'suspensa', ok: false, d, txt: 'Conta suspensa. Contacte o suporte do GestMZ.' };
   if (d < 0) return { k: 'expirada', ok: false, d, txt: 'A subscrição expirou. Só é possível consultar dados até renovar.' };
   if (l.estado === 'teste') return { k: 'teste', ok: true, d, txt: `Teste grátis: ${d === 0 ? 'termina hoje' : d === 1 ? 'falta 1 dia' : 'faltam ' + d + ' dias'}.` };
@@ -394,7 +463,7 @@ function banner() {
   const el = $('#banner'); if (!el || !S.loja) return;
   const a = assin();
   if (!a.txt) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="banner ${a.ok ? '' : 'bad'}"><span>${esc(a.txt)}</span>${S.perfil.papel === 'dono' ? '<button class="btn sun" id="renovar">Renovar assinatura</button>' : '<span class="small">Peça ao dono da loja para renovar.</span>'}</div>`;
+  el.innerHTML = `<div class="banner ${a.ok ? '' : 'bad'}"><span>${esc(a.txt)}</span>${vePlano() ? '<button class="btn sun" id="renovar">Renovar assinatura</button>' : ''}</div>`;
   const r = $('#renovar'); if (r) r.onclick = () => go('assinatura');
 }
 
@@ -402,6 +471,7 @@ function banner() {
 function pararRT() {
   canais.forEach(c => { try { sb.removeChannel(c); } catch (e) { /* ok */ } }); canais = [];
   clearInterval(hb); clearInterval(poll); hb = poll = null;
+  if (typeof notifParar === 'function') notifParar();
 }
 function iniciarRT() {
   pararRT();
@@ -410,16 +480,18 @@ function iniciarRT() {
   const stock = deb(async () => { try { await recarregarProdutos(); if (cur === 'pdv' && window.pdvLista) pdvLista(); else if (cur === 'produtos' || cur === 'painel') go(cur, true); } catch (e) { /* ok */ } });
   const vend = deb(() => { if (cur === 'painel' || cur === 'vendas') go(cur, true); });
   try {
-    const ch = sb.channel('loja-' + id)
+    // canais separados: se um deles falhar (tabela fora da publicação, migração por aplicar), os outros continuam
+    canais.push(sb.channel('loja-' + id).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'suporte_tickets', filter: f }, () => contarSuporte(true)).subscribe());
+    canais.push(sb.channel('sinais-' + id).on('postgres_changes', { event: '*', schema: 'public', table: 'sinais_loja', filter: f }, () => { stock(); vend(); }).subscribe());   // só um contador, sem dados
+    canais.push(sb.channel('legado-' + id)   // servidor antigo (antes da migração 12): continua a avisar por tabela
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lotes', filter: f }, stock)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos', filter: f }, stock)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vendas', filter: f }, vend)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'suporte_tickets', filter: f }, () => contarSuporte(true))
-      .subscribe();
-    canais.push(ch);
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vendas', filter: f }, vend).subscribe());
   } catch (e) { /* sem tempo real: a app continua a funcionar */ }
   const batida = () => { sb.from('perfis').update({ ultimo_acesso: new Date().toISOString() }).eq('id', S.perfil.id).then(() => { }, () => { }); };
   batida(); hb = setInterval(batida, 60000);
+  if (typeof notifIniciar === 'function') notifIniciar();
+  if (S.perfil.papel === 'caixa') poll = setInterval(() => { if (navigator.onLine && cur === 'pdv') stock(); }, 45000);   // caixa: a lista acompanha as reposições mesmo sem tempo real
   if (S.perfil.papel === 'dono') { contarSuporte(false); poll = setInterval(() => contarSuporte(true), 120000); }
 }
 async function contarSuporte(avisar) {

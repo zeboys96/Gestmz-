@@ -1,0 +1,30 @@
+{
+  "esquema": 1,
+  "atualizado_em": "2026-10-26",
+  "plataformas": {
+    "android": {
+      "ultima": null,
+      "minima": null,
+      "bloquear": false,
+      "publicada_em": null,
+      "url": null,
+      "sha256": null,
+      "notas": [],
+      "requisitos": {
+        "android_min": 8
+      }
+    },
+    "windows": {
+      "ultima": null,
+      "minima": null,
+      "bloquear": false,
+      "publicada_em": null,
+      "url": null,
+      "sha256": null,
+      "notas": [],
+      "requisitos": {
+        "windows_min": "10.0.17763"
+      }
+    }
+  }
+}

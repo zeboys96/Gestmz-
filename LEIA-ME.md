@@ -39,7 +39,7 @@ As categorias iniciais dependem do tipo de loja (mais de 40 para qualquer comér
 ## Primeiros passos (uma única vez)
 
 1. **Supabase → Authentication → Sign In / Providers → Email:** desligue **Confirm email**. Sem isto as contas criadas não conseguem entrar.
-2. Abra a app e toque em **Configurar o dono do sistema**. Faça isto antes de dar o endereço a alguém: só a primeira pessoa pode criar esta conta.
+2. A criação do dono do sistema só funciona se o servidor a autorizar: no SQL Editor, depois de aplicar `supabase/migracao_10_inicializacao_segura.sql`, corra `update public.plataforma set inicializacao_aberta = true;` e depois abra a app e toque em **Configurar o dono do sistema**. A autorização desliga-se sozinha assim que a conta é criada e nunca volta a abrir enquanto existir um dono (ver `docs/SEGURANCA.md`).
 3. Em **Preços e conta**, confirme o titular, o número de recebimento e os preços (os valores iniciais são exemplos).
 4. Em **Lojas → + Novo lojista**, crie a conta de cada cliente. A app mostra a mensagem pronta (endereço, e-mail e senha) para copiar ou enviar por WhatsApp.
 
@@ -66,6 +66,17 @@ O lojista abre **Suporte** e escreve uma dúvida, sugestão ou problema. O dono 
 O Capacitor cria a pasta `android/` de raiz em cada compilação, por isso, sem este passo, o APK saía sempre com o ícone e o splash padrão do Capacitor. A compilação agora corre `resources/aplicar-android.py`, que aplica o logótipo do GestMZ (o mesmo de `www/icon.svg`): ícone normal, redondo e adaptativo (barras amarelas sobre verde #00453A), splash verde com o logótipo (Android 12+ e anteriores) e fundo verde até a interface carregar. Se o modelo do Capacitor mudar, o script falha e a compilação pára, em vez de gerar um APK com o ícone errado. Para trocar o logótipo: altere as cores/desenho em `resources/gerar-icones.js`, corra `node resources/gerar-icones.js` e faça commit.
 
 O `supabase.js` é guardado dentro da aplicação durante a compilação (APK e site), e as fontes carregam em segundo plano, para a abertura não ficar parada à espera da internet. O identificador `mz.gestmz.app` e o nome «GestMZ» não foram alterados.
+
+## Versões e atualizações (Android e Windows)
+
+A versão é uma só, em `package.json` (`x.y.z`). O `versionCode` do Android é calculado (1.2.3 → 10203). Para subir de versão altere `package.json`, `desktop/package.json` e `www/versao.js` e corra `node scripts/verificar-versoes.js`, que falha se estiverem diferentes.
+
+- **Web (Vercel):** sem alterações; atualiza-se sozinha.
+- **Android:** a app consulta `www/versions.json` (no ramo `main`) e avisa quando há versão nova. O Android não deixa instalar em silêncio: a app abre a transferência do APK da Release e o utilizador toca para instalar. Os dados mantêm-se **se o APK novo tiver a mesma assinatura**. Por isso a versão de produção é assinada com uma chave permanente guardada nos segredos do GitHub (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`). **Guarde cópias dessa chave fora do GitHub: sem ela não há atualizações por cima.** O primeiro APK assinado com a chave nova exige desinstalar uma vez o APK de teste atual (sincronize antes as vendas pendentes).
+- **Windows:** aplicação Electron (`desktop/`), instalador NSIS por utilizador, atualização com `electron-updater` a partir das Releases. Sem certificado de assinatura de código o Windows mostra o aviso SmartScreen.
+- **Preparar uma versão:** Actions → **Preparar versão** → *teste* (só artefactos) ou *candidata* (APK assinado + instalador + rascunho de Release, depois de aprovação no ambiente `aprovacao-release`; configure aí os *Required reviewers*). Nada é publicado sozinho.
+- **Publicar:** abra o rascunho, teste os instaladores, carregue em *Publish release*. Só depois gere a proposta com `scripts/atualizar-versions.js` e faça commit de `www/versions.json`: é isso que faz as apps avisarem.
+- **Reverter:** a versão não desce. Publique uma versão nova (número maior) com o código bom, ou ponha `bloquear: true`/`minima` em `versions.json` para forçar a atualização.
 
 ## Instalar no telemóvel
 

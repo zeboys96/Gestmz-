@@ -4,7 +4,7 @@ S.lojas = []; S.pf = []; S.pags = []; S.tks = [];
 async function carregarSuper() {
   const [pl, lj, pf, pg, tk] = await Promise.all([
     q(sb.from('plataforma').select('*')),
-    all(() => sb.from('lojas').select('*').order('criado_em', { ascending: false })),
+    lerLista('admin_listar_lojas', {}, () => sb.from('lojas').select('*').order('criado_em', { ascending: false }), ['criado_em', { ascending: false }]),
     all(() => sb.from('perfis').select('id,loja_id,papel,ativo,nome,email')),
     all(() => sb.from('pagamentos_assinatura').select('*').order('criado_em', { ascending: false })),
     all(() => sb.from('suporte_tickets').select('*').order('atualizado_em', { ascending: false }))

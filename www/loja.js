@@ -11,7 +11,7 @@ VIEWS.painel = async function () {
   const hoje = ymd(), m0 = hoje.slice(0, 8) + '01', sete = new Date(); sete.setDate(sete.getDate() - 6);
   const desde = m0 < ymd(sete) ? m0 : ymd(sete);
   const [vs0, eq] = await Promise.all([
-    all(() => sb.from('vendas').select('id,num,data,usuario_id,usuario_nome,total,pagamento,itens,anulada,desconto').gte('data', diaIso(desde)).order('data', { ascending: false })),
+    lerVendas(diaIso(desde)),
     all(() => sb.from('perfis').select('id,nome,usuario,papel,foto,ativo,ultimo_acesso').eq('loja_id', S.loja.id).order('nome'))
   ]);
   S.equipa = eq; recarregarLoja().catch(() => { });
@@ -23,7 +23,7 @@ VIEWS.painel = async function () {
   const baixo = S.produtos.filter(p => ['baixo', 'sem'].includes(estado(p)));
   const exp = S.produtos.flatMap(p => p.lotes.filter(l => l.validade && diasPara(l.validade) <= 90).map(l => ({ p, l }))).sort((a, b) => a.l.validade.localeCompare(b.l.validade));
   const fiado = r2(S.clientes.reduce((s, c) => s + +c.divida, 0));
-  const valorStock = r2(S.produtos.reduce((s, p) => s + estoque(p) * +p.custo, 0));
+  const valorStock = veCustos() ? r2(S.produtos.reduce((s, p) => s + estoque(p) * +p.custo, 0)) : 0;
   const equipaHoje = S.equipa.filter(u => u.ativo).map(u => { const x = vh.filter(v => v.usuario_id === u.id); return { u, n: x.length, t: soma(x) }; }).sort((a, b) => b.t - a.t || a.u.nome.localeCompare(b.u.nome));
   const topT = Math.max(1, ...equipaHoje.map(e => e.t));
   const lider = equipaHoje[0] && equipaHoje[0].t > 0 ? equipaHoje[0] : null;
@@ -31,12 +31,12 @@ VIEWS.painel = async function () {
   <div class="grid">
     <div class="stat hi"><span>Vendas hoje</span><b>${mt(soma(vh))}</b></div>
     <div class="stat"><span>Nº de vendas hoje</span><b>${vh.length}</b></div>
-    <div class="stat ok"><span>Lucro bruto hoje</span><b>${mt(r2(vh.reduce((s, v) => s + lucroVenda(v), 0)))}</b></div>
+    ${veCustos() ? `<div class="stat ok"><span>Lucro bruto hoje</span><b>${mt(r2(vh.reduce((s, v) => s + lucroVenda(v), 0)))}</b></div>` : ''}
     <div class="stat"><span>Vendas do mês</span><b>${mt(soma(vm))}</b></div>
     <div class="stat warn"><span>Stock baixo ou esgotado</span><b>${baixo.length}</b></div>
     <div class="stat bad"><span>Lotes a expirar (90 dias)</span><b>${exp.length}</b></div>
     <div class="stat warn"><span>Fiado por receber</span><b>${mt(fiado)}</b></div>
-    <div class="stat"><span>Valor do stock (custo)</span><b>${mt(valorStock)}</b></div>
+    ${veCustos() ? `<div class="stat"><span>Valor do stock (custo)</span><b>${mt(valorStock)}</b></div>` : ''}
   </div>
   <div class="cols">
     <div class="card"><h3>Quem vendeu hoje</h3>${lider ? `<p class="muted small" style="margin-top:-6px">Melhor vendedor: <b>${esc(lider.u.nome)}</b></p>` : ''}
@@ -61,7 +61,7 @@ const filtrarProdutos = t => { t = t.toLowerCase(); return S.produtos.filter(p =
 VIEWS.pdv = async function () {
   const a = assin(), gestor = isGestor();
   $('#main').innerHTML = `<div class="bar"><h2>Vender</h2><span class="muted">${esc(S.perfil.nome)} · ${PAPEL[S.perfil.papel]}</span></div>${aviso(a)}
-  <div class="pdv"><section class="card"><div class="scan"><input class="in" id="q" placeholder="Passe o leitor de código de barras ou escreva o nome…" autocomplete="off" inputmode="search" aria-label="Procurar produto"><button class="btn ghost" id="cam" type="button" title="Ler código com a câmara" aria-label="Ler código com a câmara">${ico('camera')}</button></div><div class="plist" id="lista"></div></section>
+  <div class="pdv"><section class="card"><div class="scan"><input class="in" id="q" placeholder="Passe o leitor de código de barras ou escreva o nome…" autocomplete="off" inputmode="search" aria-label="Procurar produto"><button class="btn ghost" id="cam" type="button" title="Ler código com a câmara" aria-label="Ler código com a câmara">${ico('camera')}</button></div><div id="scan" class="scanbox" aria-live="polite"></div><div class="plist" id="lista"></div></section>
   <section class="card"><h3>Venda actual</h3><div id="cart"></div><div id="tot"></div>
     <div class="row" style="margin-top:12px"><label>Cliente<select class="in" id="cli"><option value="">Consumidor final</option>${opts(S.clientes.map(c => [c.id, c.nome]))}</select></label><label>Desconto (MT)<input class="in" id="desc" inputmode="decimal" value="0" ${gestor ? '' : 'disabled title="Só o gerente pode dar desconto"'}></label></div>
     <button class="link small" id="novoCli" type="button">+ Novo cliente</button>
@@ -70,37 +70,62 @@ VIEWS.pdv = async function () {
     <div class="row"><button class="btn ghost" id="lmp" type="button">Cancelar venda</button><button class="btn" id="fin" type="button" ${a.ok ? '' : 'disabled'}>${ico('check')} Finalizar venda</button></div></section></div>`;
   const q = $('#q');
   window.pdvLista = () => {
-    const l = filtrarProdutos(q.value.trim()).slice(0, 40);
-    $('#lista').innerHTML = l.length ? l.map(p => { const v = vendavel(p); return `<div class="pi" ${v <= 0 ? 'style="opacity:.55"' : ''}><button class="main" type="button" data-id="${p.id}" data-c="0"><b>${esc(p.nome)}</b><small>${esc(p.categoria || '')} · stock ${v}${p.un_por_caixa ? ` (${caixasVend(p)} ${esc((p.embalagem || 'caixa').toLowerCase())}(s) fechada(s) + ${v - caixasVend(p) * p.un_por_caixa} solta(s))` : ''}${p.controlado ? ' · exige receita' : ''}</small></button><span class="px">${mt(p.preco)}</span>${p.un_por_caixa && p.preco_caixa ? `<button class="btn ghost sm" type="button" data-id="${p.id}" data-c="1" title="Vender a embalagem fechada">${esc(p.embalagem || 'Caixa')} ${p.un_por_caixa} un · ${mt(p.preco_caixa)}</button>` : ''}</div>`; }).join('') : `<div class="empty">Nenhum produto encontrado.${gestor ? '<br>Registe-o em “Produtos”.' : '<br>Peça ao gerente para o registar.'}</div>`;
+    let l = filtrarProdutos(q.value.trim()); if (!veStock()) l = l.filter(p => vendavel(p) > 0);   // caixa: sem stock = fora da lista (o servidor também o garante)
+    l = l.slice(0, 40);
+    $('#lista').innerHTML = l.length ? l.map(p => { const v = vendavel(p), vs_ = veStock(); return `<div class="pi" ${vs_ && v <= 0 ? 'style="opacity:.55"' : ''}>${fotoImg(p)}<button class="main" type="button" data-id="${p.id}" data-c="0"><b>${esc(p.nome)}</b><small>${esc(p.categoria || '')}${vs_ ? ` · stock ${v}${p.un_por_caixa ? ` (${caixasVend(p)} ${esc((p.embalagem || 'caixa').toLowerCase())}(s) fechada(s) + ${v - caixasVend(p) * p.un_por_caixa} solta(s))` : ''}` : ''}${p.controlado ? ' · exige receita' : ''}</small></button><span class="px">${mt(p.preco)}</span>${p.un_por_caixa && p.preco_caixa && (vs_ || caixasVend(p) > 0) ? `<button class="btn ghost sm" type="button" data-id="${p.id}" data-c="1" title="Vender a embalagem fechada">${esc(p.embalagem || 'Caixa')} ${p.un_por_caixa} un · ${mt(p.preco_caixa)}</button>` : ''}</div>`; }).join('') : `<div class="empty">${q.value.trim() ? 'Nenhum produto encontrado.' : veStock() ? 'Nenhum produto encontrado.' : 'Nenhum produto disponível para venda.'}${gestor ? '<br>Registe-o em “Produtos”.' : '<br>Peça ao gerente para o registar ou repor.'}</div>`;
+    fotosObservar($('#lista'));
   };
   $('#lista').onclick = e => { const b = e.target.closest('button[data-id]'); if (b) { pdvAdd(b.dataset.id, b.dataset.c === '1'); if (innerWidth > 900) q.focus(); } };
   q.oninput = pdvLista;
-  q.onkeydown = e => {
+  q.onkeydown = async e => {
     if (e.key !== 'Enter') return; e.preventDefault(); const t = q.value.trim(); if (!t) return;
-    const r = achar(t);
-    if (r) { pdvAdd(r.p.id, r.caixa); q.value = ''; pdvLista(); return; }
-    const m = filtrarProdutos(t); if (m.length === 1) { pdvAdd(m[0].id, false); q.value = ''; pdvLista(); } else { toast('Código ou produto não encontrado.', true); q.select(); }
+    if (pdvCodigo(t)) { q.value = ''; pdvLista(); return; }
+    const m = filtrarProdutos(t).filter(p => veStock() || vendavel(p) > 0);
+    if (m.length === 1) { pdvAdd(m[0].id, false); q.value = ''; pdvLista(); return; }
+    if (!m.length && !/\s/.test(t) && await pdvCodigoRemoto(t)) { q.value = ''; pdvLista(); return; }
+    toast('Código ou produto não encontrado.', true); q.select();
   };
-  $('#cam').onclick = () => lerCamera(c => { const r = achar(c); if (r) pdvAdd(r.p.id, r.caixa); else { q.value = c; pdvLista(); toast('Código ' + c + ' não registado.', true); } });
-  $('#cart').onclick = async e => {
-    const b = e.target.closest('button[data-k]'); if (!b) return; const it = cart.find(c => cartKey(c) === b.dataset.k); if (!it) return; const p = prodById(it.pid);
+  $('#cam').onclick = () => lerCamera(async c => { if (pdvCodigo(c)) return; if (await pdvCodigoRemoto(c)) return; q.value = c; pdvLista(); toast('Código ' + c + ' não encontrado.', true); });
+  /* Venda ainda em curso: retirar artigos, diminuir quantidades e cancelar a venda atual não pedem autorização. Nada disto toca em vendas concluídas, no stock ou no catálogo. */
+  $('#cart').onclick = e => {
+    const b = e.target.closest('button[data-k]'); if (!b) return; const it = cart.find(c => cartKey(c) === b.dataset.k); if (!it) return;
     if (b.dataset.a === '+') return pdvAdd(it.pid, it.caixa);
-    const rem = b.dataset.a === 'x' || it.qtd <= 1;
-    const g = await autorizar(rem ? `Retirar «${p.nome}» da venda em curso.` : `Diminuir a quantidade de «${p.nome}».`, rem ? 'retirar_item' : 'diminuir_item', `${p.nome} (${it.qtd}${it.caixa ? ' ' + (p.embalagem || 'caixa').toLowerCase() + '(s)' : ''}) na venda em curso`);
-    if (!g) return; g.fim();
-    if (rem) cart = cart.filter(c => c !== it); else it.qtd--;
+    if (b.dataset.a === 'x' || it.qtd <= 1) cart = cart.filter(c => c !== it); else it.qtd--;
     pdvDraw();
   };
   ['desc', 'pag', 'rec'].forEach(i => $('#' + i).oninput = pdvDraw);
   $('#novoCli').onclick = () => formCliente(null, c => { $('#cli').insertAdjacentHTML('beforeend', `<option value="${c.id}">${esc(c.nome)}</option>`); $('#cli').value = c.id; });
-  $('#lmp').onclick = async () => {
-    if (!cart.length) return;
-    const g = await autorizar('Cancelar a venda em curso.', 'cancelar_venda_em_curso', `${cart.length} linha(s) descartadas`);
-    if (!g) return; g.fim(); cart = []; pdvDraw();
-  };
+  $('#lmp').onclick = () => { if (!cart.length) return; cart = []; pdvLimparSelecao(); pdvDraw(); };   // só descarta a venda em curso (nada foi gravado)
   $('#fin').onclick = pdvFinalizar;
   pdvLista(); pdvDraw(); if (innerWidth > 900) q.focus();
 };
+/* Código lido por leitor ou câmara. Devolve true se tratou o código (adicionou ao carrinho ou explicou porque não pode). */
+function pdvCodigo(cod) {
+  const r = achar(cod); if (!r) return false;
+  const disp = r.caixa ? caixasVend(r.p) : vendavel(r.p);
+  mostrarScan({ p: r.p, nome: r.p.nome, preco: r.caixa ? r.p.preco_caixa : r.p.preco, caixa: r.caixa, emb: r.p.embalagem, un: r.p.un_por_caixa, disp });
+  if (disp > 0) pdvAdd(r.p.id, r.caixa);
+  else { bip(); toast(r.caixa && vendavel(r.p) > 0 ? `Não há ${(r.p.embalagem || 'caixa').toLowerCase()}s fechadas de «${r.p.nome}».` : `«${r.p.nome}» está sem stock.`, true); }
+  return true;
+}
+/* Produtos sem stock não vêm na lista do caixa: o servidor diz se o código existe e se há para vender (nunca devolve custos nem lotes). */
+async function pdvCodigoRemoto(cod) {
+  if (!navigator.onLine) return false;
+  let r; try { r = await q(sb.rpc('produto_por_codigo', { p_codigo: cod })); } catch (e) { return false; }
+  if (!r || !r.encontrado) return false;
+  const disp = r.caixa ? +r.disp_cx : +r.disp_un;
+  if (r.disponivel) { try { await recarregarProdutos(); } catch (e) { /* ok */ } pdvLista(); return pdvCodigo(cod); }
+  mostrarScan({ p: { id: r.id, foto_ver: r.foto_ver }, nome: r.nome, preco: r.preco, caixa: r.caixa, emb: r.embalagem, un: r.un_por_caixa, disp });
+  bip(); toast(r.caixa && +r.disp_un > 0 ? `Não há ${(r.embalagem || 'caixa').toLowerCase()}s fechadas de «${r.nome}».` : `«${r.nome}» está sem stock.`, true);
+  return true;
+}
+function mostrarScan(i) {
+  const el = $('#scan'); if (!el) return;
+  const sem = !(i.disp > 0), qtd = i.disp > 0 && i.disp < SEM_LIMITE ? `Disponível: <b>${i.disp}</b>${i.caixa ? ' ' + esc((i.emb || 'caixa').toLowerCase()) + '(s)' : ''}` : '';
+  el.innerHTML = `<div class="scancard ${sem ? 'sem' : ''}"><img class="pfoto grande" src="${FOTO_ESPERA}" alt=""><div class="sc-t"><b>${esc(i.nome)}</b>${i.caixa ? `<span class="muted small">${esc(i.emb || 'Caixa')} de ${i.un}</span>` : ''}<span class="sc-p">${mt(i.preco)}</span>${sem ? '<span class="sc-no">Sem stock</span>' : qtd ? `<span class="sc-ok">${qtd}</span>` : ''}</div></div>`;
+  fotoProgressiva($('img', el), i.p);
+  clearTimeout(window._scanT); window._scanT = setTimeout(() => { const e2 = $('#scan'); if (e2) e2.innerHTML = ''; }, 12000);
+}
 function pdvAdd(pid, caixa) {
   const p = prodById(pid); if (!p) return;
   if (!assin().ok) return toast('A subscrição expirou. Renove para vender.', true);
@@ -111,6 +136,11 @@ function pdvAdd(pid, caixa) {
   const add = () => { const it = cart.find(c => c.pid === pid && c.caixa === caixa); if (it) it.qtd++; else cart.push({ pid, caixa, qtd: 1 }); pdvDraw(); };
   if (p.controlado && !cart.some(c => c.pid === pid)) return ask(`«${p.nome}» é medicamento controlado e exige receita médica. Confirma que a receita foi apresentada?`, add, 'Receita apresentada');
   add();
+}
+/* Volta ao estado inicial da venda seguinte. Só se chama depois de a venda estar gravada (ou guardada na fila) ou cancelada com autorização. */
+function pdvLimparSelecao() {
+  const set = (id, v) => { const e = $('#' + id); if (e) e.value = v; };
+  set('cli', ''); set('pag', 'Numerário'); set('rec', ''); set('desc', '0');
 }
 function pdvTotais() {
   let sub = 0, iva = 0;
@@ -139,11 +169,12 @@ async function pdvFinalizar() {
     try { if (!navigator.onLine) throw new Error(SEM_NET); v = await q(sb.rpc('registar_venda', { p_itens: dados.itens, p_pagamento: pg, p_cliente: dados.cliente, p_desconto: t.desc, p_recebido: rec, p_ref: ref })); }
     catch (e) {
       if (!ehRede(e)) throw e;   // sem ligação: a venda fica guardada neste aparelho e segue depois (a mesma referência impede duplicados)
-      v = enfileirarVenda(ref, dados, t); cart = []; await VIEWS.pdv(); bip(); toast('Sem internet: venda guardada neste aparelho. Segue quando houver ligação.'); mostrarRecibo(v); return;
+      v = enfileirarVenda(ref, dados, t); cart = []; pdvLimparSelecao(); await VIEWS.pdv(); bip(); toast('Sem internet: venda guardada neste aparelho. Segue quando houver ligação.'); mostrarRecibo(v); return;
     }
-    cart = [];
-    const cl = await all(() => sb.from('clientes').select('*').order('nome')); S.clientes = cl;
-    await recarregarProdutos(); await VIEWS.pdv(); bip(); mostrarRecibo(v);
+    // a venda ficou gravada: a seleção (cliente, pagamento, desconto) é limpa já, antes de qualquer atualização que possa falhar
+    cart = []; pdvLimparSelecao();
+    try { S.clientes = await all(() => sb.from('clientes').select('*').order('nome')); await recarregarProdutos(); } catch (e) { /* a venda está gravada; os dados atualizam-se na próxima leitura */ }
+    await VIEWS.pdv(); bip(); mostrarRecibo(v);
   } catch (e) { erro(e); b.disabled = false; await recarregarProdutos().catch(() => { }); if (window.pdvLista) pdvLista(); }
 }
 function anularVenda(v, w) {
@@ -164,7 +195,7 @@ VIEWS.vendas = async function () {
   let dia = ymd();
   $('#main').innerHTML = `<div class="bar"><h2>Vendas</h2><input class="in" type="date" id="d" value="${dia}" style="width:auto" aria-label="Dia"></div><div class="card" id="c"></div>`;
   const draw = async () => {
-    const l = await all(() => sb.from('vendas').select('*').gte('data', diaIso(dia)).lt('data', diaIso(dia, 1)).order('data', { ascending: false }));
+    const l = await lerVendas(diaIso(dia), diaIso(dia, 1));
     window._vs = l;
     const ok = l.filter(v => !v.anulada), pg = {}; ok.forEach(v => pg[v.pagamento] = (pg[v.pagamento] || 0) + +v.total);
     $('#c').innerHTML = l.length ? `<div class="tw"><table><tr><th>Nº</th><th>Hora</th><th>Vendedor</th><th>Pagamento</th><th class="n">Total</th><th></th></tr>${l.map(v => `<tr class="${v.anulada ? 'off' : ''}"><td>${nvenda(v)}</td><td>${fh(v.data)}</td><td>${esc(v.usuario_nome)}</td><td>${esc(v.pagamento)}</td><td class="n">${mt(v.total)}</td><td class="act"><button class="btn ghost sm" data-id="${v.id}">Ver</button></td></tr>`).join('')}</table></div>
@@ -180,14 +211,16 @@ let pf = { q: '', f: 'todos', c: '' };
 VIEWS.produtos = async function () {
   const adm = isGestor(), a = assin();
   $('#main').innerHTML = `<div class="bar"><h2>Produtos</h2><div class="act">${adm ? `<button class="btn ghost" id="ent">Entrada de stock</button><button class="btn ghost" id="cats">Categorias</button><button class="btn" id="novo" ${a.ok ? '' : 'disabled'}>+ Novo produto</button>` : ''}</div></div>${aviso(a)}
-  <div class="card"><div class="row"><input class="in" id="q" placeholder="Procurar por nome, código ou categoria…" value="${esc(pf.q)}" aria-label="Procurar"><select class="in" id="c" aria-label="Categoria"><option value="">Todas as categorias</option>${opts(S.cats.map(c => c.nome), pf.c)}</select><select class="in" id="f" aria-label="Estado">${opts([['todos', 'Todos'], ['baixo', 'Stock baixo'], ['sem', 'Sem stock'], ['expira', 'A expirar ou expirados']], pf.f)}</select></div><div id="tb"></div></div>`;
+  <div class="card"><div class="row"><input class="in" id="q" placeholder="Procurar por nome, código ou categoria…" value="${esc(pf.q)}" aria-label="Procurar"><select class="in" id="c" aria-label="Categoria"><option value="">Todas as categorias</option>${opts(S.cats.map(c => c.nome), pf.c)}</select>${veStock() ? `<select class="in" id="f" aria-label="Estado">${opts([['todos', 'Todos'], ['baixo', 'Stock baixo'], ['sem', 'Sem stock'], ['expira', 'A expirar ou expirados']], pf.f)}</select>` : ''}</div><div id="tb"></div></div>`;
   const draw = () => {
     const t = pf.q.toLowerCase();
     const l = S.produtos.filter(p => (!t || p.nome.toLowerCase().includes(t) || (p.codigo || '').includes(t) || (p.codigo_caixa || '').includes(t) || (p.categoria || '').toLowerCase().includes(t)) && (!pf.c || p.categoria === pf.c) &&
       (pf.f === 'todos' || (pf.f === 'baixo' && estoque(p) > 0 && estoque(p) <= p.minimo) || (pf.f === 'sem' && estoque(p) <= 0) || (pf.f === 'expira' && p.lotes.some(x => x.validade && diasPara(x.validade) <= 90))));
-    $('#tb').innerHTML = l.length ? `<div class="tw"><table><tr><th>Produto</th><th>Categoria</th><th class="n">Stock</th><th class="n">Preço</th><th>Validade</th><th>Estado</th><th></th></tr>${l.map(p => { const s = estado(p), e = estoque(p); return `<tr><td><b>${esc(p.nome)}</b>${p.controlado ? ' <span class="tag baixo">receita</span>' : ''}<br><span class="muted small">${esc(p.codigo || 'sem código')}${p.un_por_caixa ? ' · caixa ' + esc(p.codigo_caixa || '—') + ' (' + p.un_por_caixa + ' un)' : ''}</span></td><td>${esc(p.categoria || '—')}</td><td class="n">${e}${p.un_por_caixa ? `<br><span class="muted small">${caixasP(p)} ${esc((p.embalagem || 'caixa').toLowerCase())}(s) fechada(s)<br>${soltasP(p)} solta(s)</span>` : ''}</td><td class="n">${mt(p.preco)}${p.preco_caixa ? `<br><span class="muted small">caixa ${mt(p.preco_caixa)}</span>` : ''}</td><td>${fd(proxVal(p))}</td><td><span class="tag ${s}">${ESTADO_TXT[s]}</span></td><td class="act">${adm ? `<button class="btn ghost sm" data-a="in" data-id="${p.id}">+ Stock</button><button class="btn ghost sm" data-a="out" data-id="${p.id}">Baixa</button><button class="btn ghost sm" data-a="et" data-id="${p.id}">Etiquetas</button><button class="btn ghost sm" data-a="ed" data-id="${p.id}">Editar</button><button class="btn ghost sm" data-a="del" data-id="${p.id}" aria-label="Apagar">Apagar</button>` : ''}</td></tr>`; }).join('')}</table></div>` : `<div class="empty">Nenhum produto. ${adm ? 'Toque em “+ Novo produto” para começar.' : ''}</div>`;
+    $('#tb').innerHTML = l.length ? `<div class="tw"><table><tr><th>Produto</th><th>Categoria</th>${veStock() ? '<th class="n">Stock</th>' : ''}<th class="n">Preço</th>${veStock() ? '<th>Validade</th><th>Estado</th>' : ''}<th></th></tr>${l.map(p => { const s = estado(p), e = estoque(p), vs_ = veStock(); return `<tr><td><div class="pcell">${fotoImg(p)}<div><b>${esc(p.nome)}</b>${p.controlado ? ' <span class="tag baixo">receita</span>' : ''}<br><span class="muted small">${esc(p.codigo || 'sem código')}${p.un_por_caixa ? ' · caixa ' + esc(p.codigo_caixa || '—') + ' (' + p.un_por_caixa + ' un)' : ''}</span></div></div></td><td>${esc(p.categoria || '—')}</td>${vs_ ? `<td class="n">${e}${p.un_por_caixa ? `<br><span class="muted small">${caixasP(p)} ${esc((p.embalagem || 'caixa').toLowerCase())}(s) fechada(s)<br>${soltasP(p)} solta(s)</span>` : ''}</td>` : ''}<td class="n">${mt(p.preco)}${p.preco_caixa ? `<br><span class="muted small">caixa ${mt(p.preco_caixa)}</span>` : ''}</td>${vs_ ? `<td>${fd(proxVal(p))}</td><td><span class="tag ${s}">${ESTADO_TXT[s]}</span></td>` : ''}<td class="act">${adm ? `<button class="btn ghost sm" data-a="in" data-id="${p.id}">+ Stock</button><button class="btn ghost sm" data-a="out" data-id="${p.id}">Baixa</button><button class="btn ghost sm" data-a="et" data-id="${p.id}">Etiquetas</button><button class="btn ghost sm" data-a="ed" data-id="${p.id}">Editar</button><button class="btn ghost sm" data-a="del" data-id="${p.id}" aria-label="Apagar">Apagar</button>` : ''}</td></tr>`; }).join('')}</table></div>` : `<div class="empty">Nenhum produto. ${adm ? 'Toque em “+ Novo produto” para começar.' : ''}</div>`;
+    fotosObservar($('#tb'));
   };
-  $('#q').oninput = e => { pf.q = e.target.value; draw(); }; $('#c').onchange = e => { pf.c = e.target.value; draw(); }; $('#f').onchange = e => { pf.f = e.target.value; draw(); };
+  if (!veStock()) pf.f = 'todos';
+  $('#q').oninput = e => { pf.q = e.target.value; draw(); }; $('#c').onchange = e => { pf.c = e.target.value; draw(); }; if ($('#f')) $('#f').onchange = e => { pf.f = e.target.value; draw(); };
   if (adm) {
     $('#novo').onclick = () => formProduto(); $('#cats').onclick = gerirCategorias; $('#ent').onclick = escolherEntrada;
     $('#tb').onclick = e => {
@@ -248,7 +281,7 @@ const fe = (el, msg) => { // erro junto ao campo
 };
 function formProduto(p) {
   const novo = !p; p = p || { nome: '', descricao: '', codigo: '', categoria: '', categoria_id: null, unidade: 'un', custo: '', preco: '', minimo: 10, iva: 0, controlado: false, codigo_caixa: '', un_por_caixa: '', preco_caixa: '', custo_caixa: '', embalagem: 'Caixa', ativo: true };
-  const emb0 = !!p.un_por_caixa, saude = eSaude(S.loja.tipo);
+  const emb0 = !!p.un_por_caixa, saude = eSaude(S.loja.tipo), donoLoja = S.perfil.papel === 'dono', foto = donoLoja ? campoFoto(p.id ? p : null) : null;
   const catAtual = { id: p.categoria_id || (S.cats.find(c => c.nome === p.categoria) || {}).id || null, nome: p.categoria || '' };
   const custoCx0 = p.custo_caixa != null && p.custo_caixa !== '' ? p.custo_caixa : (emb0 && p.custo ? r2(p.custo * p.un_por_caixa) : '');
   const w = modal(novo ? 'Novo produto' : 'Editar produto', `
@@ -258,6 +291,7 @@ function formProduto(p) {
     <label>Descrição (opcional)<input class="in" name="descricao" value="${esc(p.descricao || '')}" maxlength="200" autocomplete="off" placeholder="Ex.: sabonete de banho 90g"></label>
     <div class="row"><label>Unidade base de stock<select class="in" name="unidade">${opts(UNIDADES, p.unidade)}</select><span class="hint">É o que se conta no stock (ex.: un, kg).</span></label>
     ${novo ? '' : `<label class="chk" style="align-self:center"><input type="checkbox" name="ativo" ${p.ativo === false ? '' : 'checked'}> Produto activo</label>`}</div>
+    ${foto ? foto.html : ''}
   </section>
   <section class="fsec"><h4>2. Como vende este produto?</h4>
     <div class="seg" role="radiogroup" aria-label="Forma de venda"><label class="${emb0 ? '' : 'on'}"><input type="radio" name="modo" value="un" ${emb0 ? '' : 'checked'}> Só por unidade</label><label class="${emb0 ? 'on' : ''}"><input type="radio" name="modo" value="emb" ${emb0 ? 'checked' : ''}> Embalagem e unidade</label></div>
@@ -270,8 +304,8 @@ function formProduto(p) {
     <label>Código de barras da unidade<div class="row" style="gap:8px;flex-wrap:nowrap"><input class="in" name="codigo" inputmode="numeric" value="${esc(p.codigo || '')}" autocomplete="off" placeholder="Passe o leitor aqui (opcional)"><button type="button" class="btn ghost sm" data-gen="codigo" style="flex:none">Gerar interno</button></div><span class="hint">Se o produto não tem código, gere um código interno e cole-o numa etiqueta.</span></label>
   </section>
   <section class="fsec"><h4>3. Preços (MT)</h4>
-    <div class="row"><label id="lCusto">Custo de aquisição por unidade (MT)<input class="in" name="custo" inputmode="decimal" value="${esc(emb0 ? '' : p.custo)}" placeholder="0,00" autocomplete="off"></label>
-    <label id="lCustoCx" ${emb0 ? '' : 'hidden'}><span id="tCustoCx">Custo da embalagem (MT)</span><input class="in" name="custo_caixa" inputmode="decimal" value="${esc(custoCx0)}" placeholder="Ex.: 400" autocomplete="off"></label></div>
+    ${veCustos() ? `<div class="row"><label id="lCusto">Custo de aquisição por unidade (MT)<input class="in" name="custo" inputmode="decimal" value="${esc(emb0 ? '' : p.custo)}" placeholder="0,00" autocomplete="off"></label>
+    <label id="lCustoCx" ${emb0 ? '' : 'hidden'}><span id="tCustoCx">Custo da embalagem (MT)</span><input class="in" name="custo_caixa" inputmode="decimal" value="${esc(custoCx0)}" placeholder="Ex.: 400" autocomplete="off"></label></div>` : ''}
     <div class="row"><label id="lPrecoCx" ${emb0 ? '' : 'hidden'}>Preço de venda da embalagem (MT)<input class="in" name="preco_caixa" inputmode="decimal" value="${esc(p.preco_caixa || '')}" placeholder="Ex.: 500" autocomplete="off"></label>
     <label>Preço de venda por unidade (MT) *<input class="in" name="preco" inputmode="decimal" value="${esc(p.preco)}" placeholder="Ex.: 30" autocomplete="off"></label></div>
     <div id="calc" class="calc" aria-live="polite"></div>
@@ -280,7 +314,7 @@ function formProduto(p) {
   <section class="fsec"><h4>${novo ? '4. Stock inicial' : '4. Alertas de stock'}</h4>
     ${novo ? `<div class="row"><label id="lQe" ${emb0 ? '' : 'hidden'}><span id="tQe">Embalagens fechadas</span><input class="in" name="qtd_emb" inputmode="numeric" placeholder="0" autocomplete="off"></label><label><span id="tQu">Unidades</span><input class="in" name="qtd_un" inputmode="numeric" placeholder="0" autocomplete="off"></label></div>
     <div id="stk" class="calc"></div><div class="row"><label>Lote (opcional)<input class="in" name="lote" autocomplete="off"></label><label>Validade (opcional)<input class="in" name="validade" type="date"></label></div>` : '<p class="small muted" style="margin-top:0">Para acrescentar stock use <b>Entrada de stock</b>. O histórico fica no <b>Registo</b>.</p>'}
-    <label>Avisar quando o stock chegar a (unidades)<input class="in" name="minimo" inputmode="numeric" value="${esc(p.minimo)}" autocomplete="off"></label>
+    ${donoLoja ? `<label>Avisar quando o stock chegar a (unidades)<input class="in" name="minimo" inputmode="numeric" value="${esc(p.minimo)}" autocomplete="off"><span class="hint">Cada produto tem o seu limite. O dono recebe uma notificação quando o stock chega a este valor.</span></label>` : '<p class="small muted">O aviso de stock baixo é definido pelo dono da loja.</p>'}
     ${saude ? `<label class="chk"><input type="checkbox" name="controlado" ${p.controlado ? 'checked' : ''}> Medicamento controlado (pede receita na venda)</label>` : ''}
   </section>`, {
     wide: true, okText: 'Guardar produto',
@@ -307,22 +341,29 @@ function formProduto(p) {
       const o = { nome: T('nome'), descricao: T('descricao') || null, categoria_id: catAtual.id, categoria: catAtual.nome, unidade: T('unidade'), custo: cu, preco: pu, minimo: parseInt(T('minimo')) || 0, iva: parseInt(T('iva')) || 0,
         controlado: g('controlado') ? g('controlado').checked : !!p.controlado, codigo: T('codigo') || null,
         codigo_caixa: emb ? (T('codigo_caixa') || null) : null, un_por_caixa: emb ? un : null, preco_caixa: emb ? pc : null, custo_caixa: emb && cc ? cc : null, embalagem: emb ? T('embalagem') : null };
+      if (!veCustos()) { delete o.custo; delete o.custo_caixa; }
+      if (!donoLoja) delete o.minimo;   // só o dono define o limite de stock baixo (o servidor também o garante)
       if (!novo) o.ativo = g('ativo') ? g('ativo').checked : true;
+      let pid = p.id;
       try {
         if (novo) {
-          const r = await q(sb.from('produtos').insert({ ...o, loja_id: S.loja.id }).select());
+          const r = await q(sb.from('produtos').insert({ ...o, loja_id: S.loja.id }).select()); pid = r[0].id;
           const total = qe * (emb ? un : 0) + qu;
-          if (total > 0) await q(sb.rpc('entrada_stock', { p_produto: r[0].id, p_qtd: total, p_lote: T('lote') || null, p_validade: T('validade') || null, p_custo: cu, p_nota: 'Stock inicial', p_soltas: emb ? qu : total }));
+          if (total > 0) await q(sb.rpc('entrada_stock', { p_produto: r[0].id, p_qtd: total, p_lote: T('lote') || null, p_validade: T('validade') || null, p_custo: veCustos() ? cu : 0, p_nota: 'Stock inicial', p_soltas: emb ? qu : total }));
         } else await q(sb.from('produtos').update(o).eq('id', p.id));
       } catch (e) { const m = String(e.message || ''); if (/código de barras já está/i.test(m)) { fe(g(T('codigo') && /«/.test(m) ? 'codigo' : 'codigo_caixa'), m); toast(m, true); return false; } throw e; }
-      await recarregarProdutos(); go('produtos', true); toast('Produto guardado.');
+      // fotografia: o produto já está guardado; se a fotografia falhar, o produto não se perde (pode tentar de novo ao editar)
+      let avisoFoto = '';
+      if (foto) { const e = foto.estado(); try { if (e.acao === 'nova') await fotoEnviar(pid, e.prep, p.foto_ver || null); else if (e.acao === 'remover') await fotoRemover(pid, p.foto_ver); } catch (er) { avisoFoto = er.message; } }
+      await recarregarProdutos(); go('produtos', true); avisoFoto ? toast('Produto guardado, mas a fotografia não ficou guardada: ' + avisoFoto, true) : toast('Produto guardado.');
     }
   });
   const f = w.f, g = n => f.elements[n], T = n => (g(n) ? g(n).value : '').trim();
+  if (foto) foto.ligar(f);
   const emb = () => f.elements.modo.value === 'emb';
   const calcular = () => {
     const e = emb(), un = parseInt(T('un_por_caixa')), pu = num(T('preco')), pc = num(T('preco_caixa')), cc = num(T('custo_caixa')), nome = T('embalagem') || 'embalagem', L = [];
-    $('#tCustoCx', f).textContent = `Custo de aquisição da ${nome.toLowerCase()} (MT)`;
+    if ($('#tCustoCx', f)) $('#tCustoCx', f).textContent = `Custo de aquisição da ${nome.toLowerCase()} (MT)`;
     $('#tQe', f) && ($('#tQe', f).textContent = nome + 's fechadas'); $('#tQu', f) && ($('#tQu', f).textContent = e ? 'Unidades soltas' : 'Quantidade em unidades');
     const marg = (v, c) => v > 0 && c > 0 ? ` · margem ${Math.round((v - c) / v * 100)}%` : '';
     if (e && un >= 2) {
@@ -338,7 +379,7 @@ function formProduto(p) {
     const st = $('#stk', f); if (st) { const total = (parseInt(T('qtd_emb')) || 0) * (e && un >= 2 ? un : 0) + (parseInt(T('qtd_un')) || 0); st.innerHTML = `Stock inicial total: <b>${total} unidade(s)</b>${e && un >= 2 && (parseInt(T('qtd_emb')) || 0) ? ` <span class="muted">(${parseInt(T('qtd_emb'))} × ${un}${parseInt(T('qtd_un')) ? ' + ' + parseInt(T('qtd_un')) : ''})</span>` : ''}`; }
   };
   const modo = () => {
-    const e = emb(); $('#bEmb', f).hidden = !e; $('#lCustoCx', f).hidden = !e; $('#lPrecoCx', f).hidden = !e; $('#lCusto', f).hidden = e; const qe = $('#lQe', f); if (qe) qe.hidden = !e;
+    const e = emb(), h = (id, v) => { const x = $(id, f); if (x) x.hidden = v; }; h('#bEmb', !e); h('#lCustoCx', !e); h('#lPrecoCx', !e); h('#lCusto', e); const qe = $('#lQe', f); if (qe) qe.hidden = !e;
     $$('.seg label', f).forEach(l => l.classList.toggle('on', $('input', l).checked)); calcular();
   };
   f.addEventListener('input', calcular); f.addEventListener('change', e => { if (e.target.name === 'modo') modo(); });
@@ -380,11 +421,11 @@ function formEntrada(p, caixas) {
   modal('Entrada de stock — ' + esc(p.nome), `${p.un_por_caixa ? `<p class="small muted">1 caixa = ${p.un_por_caixa} unidades.</p>` : ''}
     <div class="row">${fld('Quantidade recebida', 'qtd', '', 'text', 'inputmode="numeric" required')}<label>Contada em<select class="in" name="em"><option value="un" ${caixas ? '' : 'selected'}>unidades</option>${p.un_por_caixa ? `<option value="cx" ${caixas ? 'selected' : ''}>caixas</option>` : ''}</select></label></div>
     <div class="row">${fld('Lote', 'lote', '')}${fld('Validade', 'validade', '', 'date')}</div>
-    <div class="row">${fld('Custo por unidade (MT)', 'custo', p.custo, 'text', 'inputmode="decimal"')}${fld('Nota (fornecedor, factura…)', 'nota', '')}</div>`, {
+    <div class="row">${veCustos() ? fld('Custo por unidade (MT)', 'custo', p.custo, 'text', 'inputmode="decimal"') : ''}${fld('Nota (fornecedor, factura…)', 'nota', '')}</div>`, {
     okText: 'Dar entrada',
     onOk: async d => {
       const n = parseInt(d.qtd) * (d.em === 'cx' ? p.un_por_caixa : 1); if (!(n > 0)) throw new Error('Quantidade inválida.');
-      await q(sb.rpc('entrada_stock', { p_produto: p.id, p_qtd: n, p_lote: d.lote || null, p_validade: d.validade || null, p_custo: num(d.custo), p_nota: d.nota || 'Entrada', p_soltas: d.em === 'cx' ? 0 : n }));
+      await q(sb.rpc('entrada_stock', { p_produto: p.id, p_qtd: n, p_lote: d.lote || null, p_validade: d.validade || null, p_custo: veCustos() ? num(d.custo) : 0, p_nota: d.nota || 'Entrada', p_soltas: d.em === 'cx' ? 0 : n }));
       await recarregarProdutos(); toast(`Entraram ${n} unidades de ${p.nome}.`); if (cur === 'produtos') go('produtos', true);
     }
   });

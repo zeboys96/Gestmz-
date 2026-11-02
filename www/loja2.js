@@ -31,6 +31,7 @@ VIEWS.clientes = async function () {
 
 /* ======================= DESPESAS ======================= */
 VIEWS.despesas = async function () {
+  if (!veDespesas()) { $('#main').innerHTML = '<div class="empty">Só o dono da loja pode ver as despesas.</div>'; return; }
   let mes = ymd().slice(0, 7);
   $('#main').innerHTML = `<div class="bar"><h2>Despesas</h2><div class="act"><input class="in" type="month" id="m" value="${mes}" style="width:auto" aria-label="Mês"><button class="btn" id="novo">+ Despesa</button></div></div><div class="card" id="c"></div>`;
   const draw = async () => {
@@ -53,15 +54,15 @@ VIEWS.relatorios = async function () {
   let vs = [];
   const draw = async () => {
     const [v0, ds] = await Promise.all([
-      all(() => sb.from('vendas').select('*').gte('data', diaIso(a)).lt('data', diaIso(b, 1)).order('data', { ascending: false })),
-      all(() => sb.from('despesas').select('valor').gte('data', a).lte('data', b))
+      lerVendas(diaIso(a), diaIso(b, 1)),
+      veDespesas() ? all(() => sb.from('despesas').select('valor').gte('data', a).lte('data', b)) : Promise.resolve([])
     ]);
     vs = v0.filter(v => !v.anulada);
     const tot = r2(vs.reduce((s, v) => s + +v.total, 0)), luc = r2(vs.reduce((s, v) => s + lucroVenda(v), 0)), desp = r2(ds.reduce((s, d) => s + +d.valor, 0)), iva = r2(vs.reduce((s, v) => s + +v.iva, 0));
     const pg = {}, vd = {}, tp = {};
     vs.forEach(v => { pg[v.pagamento] = (pg[v.pagamento] || 0) + +v.total; const x = vd[v.usuario_nome] = vd[v.usuario_nome] || { n: 0, t: 0 }; x.n++; x.t += +v.total; v.itens.forEach(i => { const t = tp[i.nome] = tp[i.nome] || { q: 0, v: 0 }; t.q += i.un; t.v += i.total; }); });
     const top = Object.entries(tp).sort((x, y) => y[1].v - x[1].v).slice(0, 10), vend = Object.entries(vd).sort((x, y) => y[1].t - x[1].t);
-    $('#r').innerHTML = `<div class="grid"><div class="stat hi"><span>Vendas</span><b>${mt(tot)}</b></div><div class="stat"><span>Nº de vendas</span><b>${vs.length}</b></div><div class="stat ok"><span>Lucro bruto</span><b>${mt(luc)}</b></div><div class="stat warn"><span>Despesas</span><b>${mt(desp)}</b></div><div class="stat ${luc - desp >= 0 ? 'ok' : 'bad'}"><span>Resultado (lucro − despesas)</span><b>${mt(luc - desp)}</b></div><div class="stat"><span>IVA incluído</span><b>${mt(iva)}</b></div></div>
+    $('#r').innerHTML = `<div class="grid"><div class="stat hi"><span>Vendas</span><b>${mt(tot)}</b></div><div class="stat"><span>Nº de vendas</span><b>${vs.length}</b></div>${veCustos() ? `<div class="stat ok"><span>Lucro bruto</span><b>${mt(luc)}</b></div>` : ''}${veDespesas() ? `<div class="stat warn"><span>Despesas</span><b>${mt(desp)}</b></div>` : ''}${veCustos() ? `<div class="stat ${luc - desp >= 0 ? 'ok' : 'bad'}"><span>Resultado (lucro − despesas)</span><b>${mt(luc - desp)}</b></div>` : ''}<div class="stat"><span>IVA incluído</span><b>${mt(iva)}</b></div></div>
     <div class="cols"><div class="card"><h3>Por forma de pagamento</h3>${Object.keys(pg).length ? `<table>${Object.entries(pg).map(([k, x]) => `<tr><td>${esc(k)}</td><td class="n">${mt(x)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem dados</div>'}</div>
     <div class="card"><h3>Por vendedor</h3>${vend.length ? `<table>${vend.map(([k, x]) => `<tr><td>${esc(k)}</td><td class="n">${x.n} venda(s)</td><td class="n">${mt(x.t)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem dados</div>'}</div>
     <div class="card"><h3>10 produtos mais vendidos</h3>${top.length ? `<table>${top.map(([k, x]) => `<tr><td>${esc(k)}</td><td class="n">${x.q} un.</td><td class="n">${mt(x.v)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem dados</div>'}</div></div>
@@ -187,12 +188,33 @@ VIEWS.perfil = async function () {
   const p = S.perfil, dono = p.papel === 'dono';
   $('#main').innerHTML = `<div class="bar"><h2>A minha conta</h2></div>
   <form class="card" id="fp"><h3>Perfil</h3><div class="row" style="align-items:center"><div style="flex:none">${avatar(p, 'xl')}</div><div>${fotoCampo(null).replace(' hidden', ' hidden')}</div></div>${fld('Nome', 'nome', p.nome, 'text', 'required')}<p class="muted small">Função: ${PAPEL[p.papel]}${S.loja ? ' · ' + esc(S.loja.nome) : ''}</p><button class="btn">Guardar perfil</button></form>
-  <form class="card" id="fs"><h3>Mudar senha</h3>${fld('Nova senha (mínimo 6 caracteres)', 'senha', '', 'password', 'required minlength="6" autocomplete="new-password"')}<button class="btn">Mudar senha</button></form>
+  <form class="card" id="fs"><h3>Mudar senha</h3>${fld('Senha atual', 'atual', '', 'password', 'required autocomplete="current-password"')}${fld('Nova senha (mínimo 6 caracteres)', 'senha', '', 'password', 'required minlength="6" autocomplete="new-password"')}${fld('Repita a nova senha', 'conf', '', 'password', 'required minlength="6" autocomplete="new-password"')}<p class="muted small">Se não se lembra da senha atual, não use este formulário: peça a recuperação de acesso.</p><button class="btn">Mudar senha</button></form>
   ${dono ? `<form class="card" id="fl"><h3>Dados do estabelecimento</h3>${fld('Nome', 'nome', S.loja.nome, 'text', 'required')}<label>Tipo<select class="in" name="tipo">${opts(TIPOS_LOJA, S.loja.tipo)}</select></label><div class="row">${fld('NUIT', 'nuit', S.loja.nuit || '')}${fld('Telefone', 'tel', S.loja.tel || '', 'tel')}</div>${fld('Endereço', 'endereco', S.loja.endereco || '')}<p class="muted small">Estes dados aparecem no recibo.</p><button class="btn">Guardar dados</button></form>` : ''}`;
   const st = ligarFoto($('#fp'));
   $('#fp').onsubmit = async e => { e.preventDefault(); try { const o = { nome: $('[name=nome]', e.target).value.trim() }; if (st.v) o.foto = st.v; await q(sb.from('perfis').update(o).eq('id', p.id)); Object.assign(S.perfil, o); toast('Perfil guardado.'); shell(S.perfil.papel === 'super' ? navSuper() : navLoja()); go('perfil', true); } catch (er) { erro(er); } };
-  $('#fs').onsubmit = async e => { e.preventDefault(); try { const { error } = await sb.auth.updateUser({ password: $('[name=senha]', e.target).value }); if (error) throw new Error(traduz(error.message)); e.target.reset(); toast('Senha alterada.'); } catch (er) { erro(er); } };
+  $('#fs').onsubmit = async e => {
+    e.preventDefault(); const f = e.target, b = $('button', f);
+    const atual = $('[name=atual]', f).value, nova = $('[name=senha]', f).value, conf = $('[name=conf]', f).value; b.disabled = true;
+    try {
+      if (nova.length < 6) throw new Error('A nova senha deve ter pelo menos 6 caracteres.');
+      if (nova !== conf) throw new Error('As duas senhas novas não são iguais.');
+      if (nova === atual) throw new Error('A nova senha tem de ser diferente da atual.');
+      // Reautenticação: confirma a senha atual com um cliente à parte (não altera a sessão em uso). A recuperação de acesso é outro processo.
+      const { data: ses } = await sb.auth.getSession(); const email = ses && ses.session && ses.session.user && ses.session.user.email;
+      if (!email) throw new Error('Inicie sessão de novo para mudar a senha.');
+      const aux = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'gestmz-aux' } });
+      const { error: ea } = await aux.auth.signInWithPassword({ email, password: atual });
+      aux.auth.signOut().catch(() => { });
+      if (ea) throw new Error(/network|fetch|rede/i.test(ea.message || '') ? 'Sem ligação. Tente de novo com Internet.' : 'A senha atual está incorreta.');
+      const { error } = await sb.auth.updateUser({ password: nova }); if (error) throw new Error(traduz(error.message));
+      f.reset(); toast('Senha alterada.');
+    } catch (er) { erro(er); } finally { b.disabled = false; }
+  };
   const fl = $('#fl'); if (fl) fl.onsubmit = async e => { e.preventDefault(); const d = Object.fromEntries(new FormData(fl)); try { await q(sb.rpc('atualizar_loja', { p_nome: d.nome, p_tipo: d.tipo, p_nuit: d.nuit, p_tel: d.tel, p_endereco: d.endereco })); await recarregarLoja(); shell(navLoja()); go('perfil', true); toast('Dados guardados.'); } catch (er) { erro(er); } };
+  if (window.GestTOTP) GestTOTP.cartaoConta($('#main')).catch(() => { });
+  if (window.GestCopia) GestCopia.cartaoConta($('#main'));
+  if (window.GestLegal) GestLegal.cartaoConta($('#main'));
+  if (window.GestMZAtualizacao) GestMZAtualizacao.cartaoConta($('#main'));
 };
 
 /* ======================= SUPORTE (dono da loja) ======================= */
@@ -208,41 +230,54 @@ VIEWS.suporte = async function () {
 };
 
 /* ======================= AJUDA ======================= */
+/* Cada item diz a que cargos se aplica (d = dono, g = gerente, c = caixa). Só descreve o que a aplicação faz hoje. */
 const SLIDES = [
-  ['painel', 'Bem-vindo ao GestMZ', 'Vendas, stock, validades, equipa e assinatura num só lugar. Funciona no telemóvel e no computador, e todos os aparelhos da loja veem os mesmos dados.'],
-  ['vender', 'Vender é rápido', 'Passe o leitor de código de barras e o produto entra na venda. Escolha como o cliente paga (dinheiro, M-Pesa, e-Mola, mKesh…), finalize e imprima o recibo. No telemóvel, use o botão da câmara para ler o código.'],
-  ['produtos', 'Produtos e categorias', 'Ao registar um produto, escolha a categoria numa lista (bebidas, cereais, higiene, cosméticos, papelaria, medicamentos…). Falta uma? Crie uma nova na hora, sem sair do ecrã.'],
-  ['barcode', 'Embalagem e unidade', 'Registe o produto uma só vez. Exemplo: o sabonete vem em caixas de 20. Indique o código da caixa, o código da unidade, o custo e o preço da caixa e o preço de cada unidade. Ler a caixa vende a caixa inteira (e baixa 20 do stock); ler a unidade vende 1. O stock conta-se sempre em unidades, por isso nunca há stock duplicado.'],
-  ['registo', 'Stock e validades', 'Cada entrada tem lote e validade. O sistema vende primeiro o que expira primeiro e nunca vende lotes expirados. O painel avisa o que está a acabar e o que está para expirar.'],
-  ['equipa', 'Equipa com perfil e foto', 'O dono cria gerentes e caixas com e-mail, senha, foto e um código de acesso. Ao entrar, o funcionário vê o seu nome e foto e digita o código. Cada cargo vê só o que lhe cabe: o caixa só as suas vendas, o gerente também a equipa de caixas, e o dono vê tudo da loja.'],
-  ['sair', 'O caixa não apaga nada sozinho', 'Para retirar um produto da venda ou anular uma venda, o caixa precisa que o gerente escreva o seu e-mail e senha. Tudo fica registado em “Registo”, com data e nome.'],
-  ['clientes', 'Fiado e clientes', 'Registe o cliente e venda a fiado. A dívida fica guardada e, quando ele pagar, use “Receber”. O dono vê o total em dívida no painel.'],
-  ['assinatura', 'Assinatura', 'Pague por e-Mola, M-Pesa ou mKesh para o número indicado, envie a foto do comprovativo em “Assinatura” e espere a confirmação. Quando confirmada, a validade actualiza sozinha.'],
-  ['check', 'Pronto para começar', 'Comece por registar alguns produtos. Se precisar de rever este guia, abra “Ajuda” no menu. Boas vendas!']
+  ['painel', 'd,g,c', 'Bem-vindo ao GestMZ', 'O GestMZ regista vendas, stock e validades, clientes, caixa e relatórios da loja. O menu mostra só o que o seu cargo pode usar. Todos os aparelhos da loja veem os mesmos dados.'],
+  ['vender', 'd,g,c', 'Vender', 'Em «Vender», leia o código de barras (leitor ou câmara) ou pesquise pelo nome, escolha como o cliente paga e finalize; o recibo pode ser mostrado ou impresso. Pode retirar artigos ou diminuir quantidades enquanto a venda não está finalizada. Para vender a fiado, escolha o cliente.'],
+  ['vendas', 'd,g,c', 'Vendas e anulações', 'Em «Vendas» vê as vendas do dia (o caixa vê só as suas). Anular uma venda já finalizada pede a autorização do gerente ou do dono, e fica registada. O stock volta ao lote de origem.'],
+  ['caixa', 'g,c', 'Fechar o caixa', 'No fim do turno, abra «Fechar caixa»: vê o resumo calculado pelo sistema, conta o dinheiro, escreve o valor contado e confirma. O sistema mostra a diferença (falta ou excesso). Depois de confirmado não se altera; só o dono pode reabrir o último fecho.'],
+  ['caixa', 'd', 'Fechos de caixa', 'Em «Fechos de caixa» vê o histórico de fechos de cada funcionário, com a diferença registada. Só o dono pode reabrir o último fecho de um funcionário, indicando o motivo; o original fica guardado.'],
+  ['produtos', 'd,g', 'Produtos e categorias', 'Registe cada produto uma só vez: nome, categoria (escolha da lista ou crie uma nova), preços e, se vender em caixa e unidade, quantas unidades tem a caixa e o código de cada uma. O stock conta-se sempre em unidades. Só o dono define o limite de stock baixo e a fotografia do produto.'],
+  ['produtos', 'c', 'Produtos', 'Em «Produtos» vê os produtos com stock disponível e o preço. Produtos sem stock não aparecem na lista de venda. Não vê custos nem quantidades.'],
+  ['registo', 'd,g', 'Stock e validades', 'Cada entrada de stock tem lote e validade. O sistema vende primeiro o que expira primeiro e não vende lotes expirados. O painel avisa o que está a acabar e o que está perto de expirar. Use «Entrada de stock» para repor.'],
+  ['clientes', 'd,g,c', 'Clientes e fiado', 'Registe o cliente (nome e telefone) e venda a fiado. A dívida fica guardada; quando o cliente pagar, use «Receber» na sua ficha.'],
+  ['despesas', 'd', 'Despesas e relatórios', 'Em «Despesas» regista os gastos da loja. Em «Relatórios» escolhe um período e vê vendas, custos e lucro. Só o dono vê despesas e lucros.'],
+  ['relatorios', 'g', 'Relatórios', 'Em «Relatórios» escolhe um período e vê as vendas. Custos, despesas e lucros são só do dono.'],
+  ['equipa', 'd', 'Equipa', 'Em «Equipa» cria gerentes e caixas (e-mail, senha, foto e código de acesso) e retira o acesso a quem sair. Ao entrar, o funcionário usa o seu código de acesso.'],
+  ['equipa', 'g', 'Equipa', 'Em «Equipa» vê a equipa e pode gerir os caixas (criar e retirar o acesso). Os outros gerentes e o dono só o dono altera.'],
+  ['assinatura', 'd', 'Subscrição', 'Em «Assinatura» escolhe o plano, paga por transferência móvel para o número indicado, envia a foto do comprovativo e aguarda a confirmação; a validade atualiza-se quando for confirmada. Sem subscrição válida só pode consultar os dados.'],
+  ['painel', 'd,g', 'Avisos (sino)', 'O sino mostra avisos: vendas, stock baixo ou a zero, vendas anuladas. O dono recebe também o aviso de caixa fechado ou reaberto. Toque para marcar como lido.'],
+  ['sair', 'd,g,c', 'Sem internet', 'Pode vender sem internet: a venda fica guardada neste aparelho e segue sozinha quando a ligação voltar. Não desinstale a aplicação com vendas por enviar. Em «Conta» pode guardar uma cópia das vendas pendentes.'],
+  ['conta', 'd,g,c', 'A sua conta', 'Em «Conta» muda a senha e vê os Termos e a Política de privacidade. O dono pode ativar o Google Autenticador para proteger a entrada, e guarda os códigos de recuperação num sítio seguro.'],
+  ['check', 'd,g,c', 'Dúvidas?', 'Volte a esta página sempre que precisar. O dono pode escrever ao Suporte; os funcionários falam com o dono da loja.']
 ];
+const slidesDoPerfil = () => SLIDES.filter(s => s[1].split(',').includes({ dono: 'd', gerente: 'g', caixa: 'c' }[S.perfil.papel] || 'x')).map(s => [s[0], s[2], s[3]]);
 VIEWS.ajudaSlides = function () {
-  let i = 0;
+  let i = 0; const SL = slidesDoPerfil();
   const w = modal('Como funciona', '<div class="slides" id="sl"></div><div class="dots" id="dots"></div>', {});
   const f = $('.mf', w.m); f.innerHTML = '<button type="button" class="btn ghost" id="pv">Anterior</button><button type="button" class="btn" id="nx">Seguinte</button>';
   const draw = () => {
-    const s = SLIDES[i];
+    const s = SL[i];
     $('#sl', w.m).innerHTML = `<div class="slide"><div class="big">${ico(s[0], 38)}</div><h3>${esc(s[1])}</h3><p>${esc(s[2])}</p></div>`;
-    $('#dots', w.m).innerHTML = SLIDES.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
-    $('#pv', w.m).disabled = i === 0; $('#nx', w.m).textContent = i === SLIDES.length - 1 ? 'Concluir' : 'Seguinte';
+    $('#dots', w.m).innerHTML = SL.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
+    $('#pv', w.m).disabled = i === 0; $('#nx', w.m).textContent = i === SL.length - 1 ? 'Concluir' : 'Seguinte';
   };
   $('#pv', w.m).onclick = () => { if (i > 0) { i--; draw(); } };
-  $('#nx', w.m).onclick = () => { if (i < SLIDES.length - 1) { i++; draw(); } else w.close(); };
+  $('#nx', w.m).onclick = () => { if (i < SL.length - 1) { i++; draw(); } else w.close(); };
   draw();
 };
 VIEWS.ajuda = async function () {
+  const papel = S.perfil.papel, dono = papel === 'dono';
   const faq = [
-    ['O leitor de código de barras precisa de instalação?', 'Não. A maioria dos leitores USB ou Bluetooth funciona como um teclado: ao ler, escreve o número e carrega em Enter. Basta o cursor estar na caixa de pesquisa do ecrã “Vender”.'],
-    ['E se o produto não tiver código de barras?', 'Pesquise pelo nome e toque no produto. Pode também usar um código inventado por si no campo de código do produto.'],
-    ['Posso usar em vários caixas ao mesmo tempo?', 'Sim. Cada caixa entra com o seu utilizador, e o stock actualiza em todos os aparelhos.'],
-    ['Preciso de internet?', 'Sim, para vender e actualizar o stock em todos os caixas. A app abre sem internet, mas as vendas só são guardadas com ligação.'],
-    ['Um funcionário esqueceu a senha. E agora?', 'O funcionário pode mudar a senha em “Conta” enquanto estiver com sessão aberta. Se já perdeu o acesso, retire o acesso na “Equipa” e crie um novo utilizador.'],
-    ['Como instalo no telemóvel?', 'Abra o endereço no Chrome, toque nos três pontos e escolha “Instalar aplicação” ou “Adicionar ao ecrã inicial”. Fica com um ícone como qualquer outra app.']
+    ['Preciso de internet?', 'Para entrar e para ver os dados atuais, sim. Para vender pode trabalhar sem internet: a venda fica guardada no aparelho e segue sozinha quando a ligação voltar (o indicador de vendas por enviar mostra o que falta). Entre uma vez com internet antes de trabalhar sem ligação.'],
+    ['O leitor de código de barras precisa de instalação?', 'Não. A maioria dos leitores USB ou Bluetooth funciona como um teclado: ao ler, escreve o número e carrega em Enter, com o cursor na pesquisa de «Vender». No telemóvel também pode usar a câmara.'],
+    ['E se o produto não tiver código de barras?', 'Pesquise pelo nome e toque no produto.' + (papel === 'caixa' ? '' : ' Ao registar o produto pode também usar um código inventado por si.')],
+    ['Um produto não aparece na venda.', 'Só aparecem produtos com stock disponível (e não expirado). Peça ao gerente ou ao dono para repor o stock.'],
+    ['Posso usar em vários caixas ao mesmo tempo?', 'Sim. Cada pessoa entra com o seu utilizador e o stock atualiza em todos os aparelhos.'],
+    ['Preciso de autorização para retirar um artigo da venda?', 'Não. Retirar artigos e diminuir quantidades enquanto a venda não está finalizada é livre. Anular uma venda já finalizada pede a autorização do gerente ou do dono.'],
+    ['Como altero a minha senha?', 'Em «Conta», com a sessão aberta.' + (dono ? ' Se perder o acesso, peça ajuda ao Suporte.' : ' Se perder o acesso, peça ao dono da loja ou ao gerente para retirar o acesso e criar um novo utilizador.')]
   ];
-  $('#main').innerHTML = `<div class="bar"><h2>Ajuda</h2><button class="btn" id="sl">Ver apresentação passo a passo</button></div><div class="cols">${faq.map(f => `<div class="card"><h3>${esc(f[0])}</h3><p style="margin:0">${esc(f[1])}</p></div>`).join('')}</div>`;
+  if (papel !== 'caixa') faq.push(['Como instalo no telemóvel?', 'Abra o endereço no Chrome, toque nos três pontos e escolha «Instalar aplicação» ou «Adicionar ao ecrã inicial». Na versão Android (APK), abra o ficheiro e permita a instalação quando o telemóvel pedir.']);
+  $('#main').innerHTML = `<div class="bar"><h2>Ajuda</h2><button class="btn" id="sl">Guia passo a passo</button></div><div class="cols">${faq.map(f => `<div class="card"><h3>${esc(f[0])}</h3><p style="margin:0">${esc(f[1])}</p></div>`).join('')}</div>`;
   $('#sl').onclick = VIEWS.ajudaSlides;
 };

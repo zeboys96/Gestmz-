@@ -3,5 +3,10 @@
   "appName": "GestMZ",
   "webDir": "www",
   "backgroundColor": "#00453A",
-  "server": { "androidScheme": "https" }
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "adjustMarginsForEdgeToEdge": "auto"
+  }
 }
