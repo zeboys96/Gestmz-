@@ -133,17 +133,55 @@
     if (P.Browser && P.Browser.open) return P.Browser.open({ url });
     raiz.open(url, '_blank', 'noopener');
   }
-  const MSG_ANDROID = 'O Android vai transferir o ficheiro. Quando terminar, toque nele na notificação e escolha Instalar. Se o Android pedir, permita instalar a partir desta origem. Os seus dados mantêm-se.';
+  const MSG_ANDROID = 'A atualização é transferida aqui, dentro do GestMZ. Quando terminar, o Android pede-lhe para confirmar a instalação. Os seus dados mantêm-se.';
+  const MSG_NAVEGADOR = 'O Android vai transferir o ficheiro. Quando terminar, toque nele na notificação e escolha Instalar. Os seus dados mantêm-se.';
+
+  /* Transferência DENTRO da app (sem abrir o navegador nem mostrar o endereço): descarrega para a cache, o plugin nativo confere o SHA-256 e o
+     pacote e abre o instalador do Android (que só aceita o mesmo certificado e pede sempre a confirmação). Se esta app não tiver os plugins
+     (versão antiga) ou falhar, o utilizador pode usar o navegador como último recurso. Devolve 'instalador' | 'permissao' | lança erro. */
+  const DIR_UPD = 'gestmz-update';
+  function nativo() { const P = (raiz.Capacitor && raiz.Capacitor.Plugins) || {}; return P.Filesystem && P.Filesystem.downloadFile && P.GestMZInstalador && P.GestMZInstalador.instalar ? P : null; }
+  async function transferirAndroid(d, aoProgresso) {
+    const P = nativo(); if (!P) throw new Error('sem-nativo');
+    if (!PADRAO_URL.test(d.url) || !/^[0-9a-f]{64}$/i.test(d.sha256 || '')) throw new Error('entrada');
+    const { pode } = await P.GestMZInstalador.podeInstalar();
+    if (!pode) { try { await P.GestMZInstalador.abrirPermissao(); } catch (e) { /* ok */ } return 'permissao'; }
+    try { await P.Filesystem.rmdir({ path: DIR_UPD, directory: 'CACHE', recursive: true }); } catch (e) { /* ainda não existe */ }
+    let ouvinte = null;
+    try {
+      if (P.Filesystem.addListener) ouvinte = await P.Filesystem.addListener('progress', pr => { if (pr && pr.contentLength > 0 && aoProgresso) aoProgresso(Math.min(100, Math.round(pr.bytes * 100 / pr.contentLength))); });
+      const r = await P.Filesystem.downloadFile({ url: d.url, path: DIR_UPD + '/GestMZ-' + d.ultima + '.apk', directory: 'CACHE', recursive: true, progress: true });
+      if (!r || !r.path) throw new Error('sem-ficheiro');
+      if (aoProgresso) aoProgresso(100);
+      await P.GestMZInstalador.instalar({ caminho: r.path, sha256: d.sha256 });
+      return 'instalador';
+    } finally { if (ouvinte && ouvinte.remove) { try { await ouvinte.remove(); } catch (e) { /* ok */ } } }
+  }
+  function detalhesAndroid(d) {
+    const w = raiz.modal('Atualização ' + esc(d.ultima), '<p>' + esc(d.texto) + '</p>' + notasHTML(d) + '<p class="muted small" id="upd-estado">' + esc(nativo() ? MSG_ANDROID : MSG_NAVEGADOR) + '</p><div id="upd-barra"></div><button type="button" class="btn block" id="upd-go">Atualizar ' + esc(d.ultima) + '</button><button type="button" class="link small" id="upd-nav" hidden>Transferir pelo navegador</button>', { sticky: true });
+    const est = $('#upd-estado', w.m), barra = $('#upd-barra', w.m), go = $('#upd-go', w.m), nav = $('#upd-nav', w.m); let ocupado = false;
+    nav.onclick = () => abrirTransferencia(d.url);
+    const falhou = msg => { est.textContent = msg; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Tentar de novo'; nav.hidden = false; ocupado = false; };
+    go.onclick = async () => {
+      if (ocupado) return; ocupado = true;
+      if (!nativo()) { ocupado = false; abrirTransferencia(d.url); return; }   // versão antiga da app, sem instalador interno
+      go.disabled = true; go.textContent = 'A transferir…'; nav.hidden = true; est.textContent = 'A transferir a atualização…'; barra.innerHTML = '<progress max="100" value="0" style="width:100%"></progress>';
+      try {
+        const r = await transferirAndroid(d, n => { est.textContent = 'A transferir a atualização… ' + n + '%'; const pg = $('progress', barra); if (pg) pg.value = n; });
+        if (r === 'permissao') { est.textContent = 'Para instalar, permita nesta janela do Android que o GestMZ instale atualizações. Depois volte aqui e toque em «Atualizar».'; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Atualizar ' + d.ultima; ocupado = false; return; }
+        est.textContent = 'Transferida. Confirme a instalação no ecrã do Android. Os seus dados mantêm-se.'; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Instalar de novo'; ocupado = false;
+      } catch (e) {
+        const c = String(e && (e.message || e)); falhou(/sha256|pacote/.test(c) ? 'A atualização transferida não passou na verificação de segurança e foi descartada. Tente de novo mais tarde.' : navigator.onLine === false ? 'Sem internet. Ligue-se e tente de novo.' : 'Não foi possível transferir a atualização. Tente de novo.');
+      }
+    };
+  }
 
   function notasHTML(d) { return d.notas && d.notas.length ? '<ul>' + d.notas.map(n => '<li>' + esc(n) + '</li>').join('') + '</ul>' : ''; }
 
   function detalhes(d) {
     if (typeof raiz.modal !== 'function') return;
     const win = d.plataforma === 'windows';
-    if (!win) {
-      raiz.modal('Atualização ' + esc(d.ultima), '<p>' + esc(d.texto) + '</p>' + notasHTML(d) + '<p class="muted small">' + esc(MSG_ANDROID) + '</p>', { okText: 'Transferir ' + esc(d.ultima), onOk: async () => { abrirTransferencia(d.url); } });
-      return;
-    }
+    if (!win) return detalhesAndroid(d);
     const w = raiz.modal('Atualização ' + esc(d.ultima), '<p>' + esc(d.texto) + '</p>' + notasHTML(d) + '<p class="muted small" id="upd-estado">A atualização é transferida em segundo plano e instalada quando reiniciar a aplicação. Os seus dados mantêm-se.</p><div id="upd-barra"></div><button type="button" class="btn block" id="upd-go">Transferir</button>', {});
     $('#upd-go', w.m).onclick = () => iniciarTransferenciaWindows(w.m);
   }
@@ -197,6 +235,6 @@
     setTimeout(verificarEmSilencio, 6000);
     setInterval(verificarEmSilencio, DOZE_H);
   }
-  raiz.GestMZAtualizacao = Object.assign({ verificar, cartaoConta, iniciar }, api);
+  raiz.GestMZAtualizacao = Object.assign({ verificar, cartaoConta, iniciar, detalhes }, api);
   iniciar();
 })(typeof window !== 'undefined' ? window : globalThis);

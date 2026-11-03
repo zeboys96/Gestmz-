@@ -94,6 +94,8 @@ test('aplicar-android.py: define versão e assinatura sem quebrar o fluxo antigo
   for (const d of ['values', 'mipmap-xxxhdpi', 'drawable']) fs.mkdirSync(path.join(res, d), { recursive: true });
   fs.writeFileSync(path.join(M, 'AndroidManifest.xml'), '<manifest xmlns:android="x"><application android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/AppTheme"><activity android:theme="@style/AppTheme.NoActionBarLaunch"/></application></manifest>');
   fs.writeFileSync(path.join(res, 'values', 'styles.xml'), '<resources><style name="AppTheme.NoActionBar" parent="Theme.AppCompat.NoActionBar"></style><style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen"></style></resources>');
+  const JV = path.join(M, 'java', 'mz', 'gestmz', 'app'); fs.mkdirSync(JV, { recursive: true });
+  fs.writeFileSync(path.join(JV, 'MainActivity.java'), 'package mz.gestmz.app;\n\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {}\n');
   const gr = path.join(t, 'android', 'app', 'build.gradle');
   fs.writeFileSync(gr, 'android {\n  defaultConfig {\n    applicationId "mz.gestmz.app"\n    versionCode 1\n    versionName "1.0"\n  }\n}\n');
   const py = env => cp.spawnSync('python3', ['-B', path.join(t, 'resources', 'aplicar-android.py')], { encoding: 'utf8', env: Object.assign({}, process.env, env) });
@@ -104,6 +106,11 @@ test('aplicar-android.py: define versão e assinatura sem quebrar o fluxo antigo
   assert.ok(!g.includes('gestmz-assinatura'), 'sem keystore não pode ligar a assinatura');
   const man = fs.readFileSync(path.join(M, 'AndroidManifest.xml'), 'utf8');
   assert.ok(man.includes('android.permission.CAMERA'), 'a permissão da câmara tem de continuar a ser aplicada');
+  // instalador de atualizações dentro da app: plugin registado, permissão e FileProvider só para a cache da atualização
+  assert.ok(man.includes('REQUEST_INSTALL_PACKAGES') && man.includes('gestmzprovider') && man.includes('gestmz_file_paths'), 'manifesto com a permissão e o FileProvider do instalador');
+  assert.ok(fs.readFileSync(path.join(JV, 'MainActivity.java'), 'utf8').includes('registerPlugin(GestMZInstalador.class)'), 'o plugin é registado na MainActivity');
+  assert.ok(fs.existsSync(path.join(JV, 'GestMZInstalador.java')) && fs.existsSync(path.join(res, 'xml', 'gestmz_file_paths.xml')), 'plugin e caminhos do FileProvider copiados');
+  assert.ok(/cache-path[^>]*gestmz-update/.test(fs.readFileSync(path.join(res, 'xml', 'gestmz_file_paths.xml'), 'utf8')) && !/files-path|external|root-path/.test(fs.readFileSync(path.join(res, 'xml', 'gestmz_file_paths.xml'), 'utf8').replace(/<!--[\s\S]*?-->/g, '')), 'o FileProvider só expõe a pasta da atualização na cache');
   const ks = path.join(t, 'k.jks'); fs.writeFileSync(ks, 'x');
   r = py({ GESTMZ_KEYSTORE: ks, GESTMZ_EXIGIR_VERSAO: '1' }); assert.equal(r.status, 0, r.stdout + r.stderr);
   r = py({ GESTMZ_KEYSTORE: ks }); assert.equal(r.status, 0);

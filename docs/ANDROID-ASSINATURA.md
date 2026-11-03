@@ -58,3 +58,8 @@ Nada foi criado nem executado: **a chave Android continua por criar.**
 - **B. Prova da chave efémera**: um passo no modo `teste` que imprime o SHA-256 do certificado do APK debug. Duas execuções com valores diferentes provam que cada APK de teste tem chave diferente (hoje é dedução, não medição). Não toca em segredos.
 
 **Riscos que continuam**: certificado do APK instalado não verificado (sem acesso ao aparelho); instalação de APK assinado **nunca testada num telefone real**; ambiente `aprovacao-release` não confirmado.
+
+## Atualização dentro da app (versão 1.1.2, 04/11/2026)
+- Ao tocar em «Atualizar», a app transfere o APK para a sua cache com uma barra de progresso, **sem abrir o navegador e sem mostrar o endereço de origem**. O plugin nativo `GestMZInstalador` confere o SHA-256 (do `versions.json`) e o pacote, e abre o instalador do Android, que só aceita o mesmo certificado e pede sempre a confirmação. Na primeira vez o Android pede para permitir que o GestMZ instale atualizações.
+- Só funciona a partir da 1.1.2: quem tem a 1.1.1 ou anterior faz **esta** atualização pelo navegador (comportamento antigo) e as seguintes dentro da app. Se a transferência interna falhar, aparece «Transferir pelo navegador» como último recurso.
+- Limite: o endereço continua a existir na rede (o ficheiro vem do alojamento das versões); apenas deixa de ser mostrado à pessoa. Testado só com plugins simulados (`tests/atualizacao-android.test.js`); falta experimentar num telemóvel real.
