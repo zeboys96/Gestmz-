@@ -103,7 +103,7 @@ function modal(title, body, o = {}) {
   document.body.appendChild(m);
   let fechado = false;
   const close = () => { if (fechado) return; fechado = true; m.remove(); if (o.onClose) o.onClose(); };
-  $$('[data-x]', m).forEach(b => b.onclick = close);
+  $$('[data-x]', m).forEach(b => b.onclick = e => { if (e) { e.preventDefault(); e.stopPropagation(); } close(); });
   m.addEventListener('mousedown', e => { if (e.target === m && !o.sticky) close(); });
   const f = $('form', m);
   f.onsubmit = async e => {
@@ -306,7 +306,7 @@ async function vSetupSuper() {
       if ((await estadoInicializacao()) !== 'aberta') throw new Error('A configuração inicial não está disponível neste momento.');
       const { data, error } = await sb.auth.signUp({ email: d.email.trim(), password: d.senha });
       if (error) throw new Error(traduz(error.message));
-      if (!data.session) throw new Error('Precisa de desligar "Confirm email" no Supabase (veja o LEIA-ME).');
+      if (!data.session) throw new Error('O servidor pede confirmação por e-mail. Contacte o suporte do GestMZ.');
       await q(sb.rpc('reivindicar_super', { p_nome: d.nome }));
       await entrar();
     } catch (err) { erro(err); b.disabled = false; }
@@ -367,12 +367,41 @@ function shell(items) {
   $('#nav').onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'sair') return sair(); go(b.dataset.v); };
   banner(); if (typeof montarTopo === 'function') montarTopo();
 }
-async function go(v, silencioso) {
-  cur = v; $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+/* Navegação. Cada pedido de ecrã tem um número (navTok). Duas causas de erro eram:
+   1) o <main> era sempre o mesmo elemento e os ecrãs deixavam lá os seus «onclick»; o clique dos Termos (botão «link») disparava o
+      manipulador antigo de «Equipa» e abria «Novo funcionário» — agora cada ecrã novo recebe um <main> limpo (sem manipuladores herdados);
+   2) um ecrã lento que acabava depois de o utilizador mudar escrevia por cima do ecrã novo — agora o resultado de um pedido antigo
+      é descartado e, se escreveu algo, o ecrã atual é redesenhado. */
+let navTok = 0, navFeito = 0, navSujo = false;
+function mainLimpo() { const m = document.createElement('main'); m.id = 'main'; const o = $('#main'); if (o) o.replaceWith(m); return m; }
+async function go(v, silencioso, opc) {
+  if (!VIEWS[v]) return;
+  const tok = ++navTok; cur = v; $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   const ativo = $('#nav button.on'); if (ativo && ativo.scrollIntoView) { try { ativo.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ok */ } }
-  if (!silencioso) { $('#main').innerHTML = '<div class="loading">A carregar…</div>'; }
-  try { await VIEWS[v](); } catch (e) { $('#main').innerHTML = `<div class="card"><div class="msg bad">${esc(e.message)}</div><button class="btn" onclick="go('${v}')">Tentar de novo</button></div>`; }
+  if (!silencioso) { mainLimpo().innerHTML = '<div class="loading">A carregar…</div>'; }
+  let falhou = null;
+  try { await VIEWS[v](); } catch (e) { falhou = e; }
+  if (tok !== navTok) {            // entretanto o utilizador escolheu outro ecrã: este resultado já não interessa
+    navSujo = true; if (navFeito === navTok) { navSujo = false; go(cur, true); } return;
+  }
+  navFeito = tok;
+  if (falhou) {
+    if (opc && opc.propagar) throw falhou;
+    $('#main').innerHTML = `<div class="card"><div class="msg bad">${esc(falhou.message)}</div><button class="btn" data-retry>Tentar de novo</button></div>`;
+    const r = $('#main [data-retry]'); if (r) r.onclick = () => go(v);
+  } else if (navSujo) { navSujo = false; return go(v, true); }   // um pedido antigo escreveu durante este: redesenha
   if (!silencioso) window.scrollTo(0, 0);
+}
+/* Atualização por gesto/botão: redesenha o ecrã atual sem o limpar; se falhar, mantém o que está e devolve o erro. */
+let atualizando = false;
+async function atualizarPagina() {
+  if (atualizando) return 'ocupado';
+  atualizando = true;
+  try {
+    // os ecrãs que mostram produtos/stock usam a cópia em memória: relê-a do servidor (leitura apenas; nunca envia nem apaga nada)
+    if (['painel', 'produtos', 'relatorios'].includes(cur) && S.perfil && S.perfil.papel !== 'super') await recarregarProdutos();
+    await go(cur, true, { propagar: true }); return 'ok';
+  } finally { atualizando = false; }
 }
 function badge(v, n) { const b = $(`#nav button[data-v="${v}"] .badge`); if (b) { b.hidden = !n; b.textContent = n; } }
 

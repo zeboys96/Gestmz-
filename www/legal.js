@@ -40,27 +40,31 @@
     privacidade: {
       titulo: 'Política de privacidade',
       html: () => `<p class="muted small">${quando}</p>
-<h4>1. Em resumo</h4>
-<p>Tratamos só o que é preciso para a loja funcionar. Não vendemos dados, não os usamos para publicidade e a aplicação não tem ferramentas de análise nem de rastreio. Cada loja só vê os seus dados.</p>
-<h4>2. Dados tratados e para quê</h4>
-<ul><li><b>Conta:</b> nome, e-mail, cargo, fotografia de perfil (opcional) e data do último acesso. Servem para o identificar, aplicar as suas permissões e mostrar quem está ligado. A senha é tratada pelo serviço de autenticação (nunca em texto legível) e o código de acesso dos funcionários é guardado só de forma cifrada (hash).</li>
-<li><b>Loja:</b> nome, tipo de negócio, NUIT, telefone, endereço, estado da subscrição e comprovativos de pagamento enviados. Servem para gerir o serviço e a subscrição.</li>
-<li><b>Atividade da loja:</b> produtos, preços, stock, lotes e validades, fotografias de produtos, vendas e quem as fez, clientes (nome, telefone e dívida), recebimentos, despesas, fechos de caixa, notificações e um registo de ações importantes. Servem para vender, controlar o stock, fechar o caixa e emitir relatórios.</li>
-<li><b>Pedidos de suporte:</b> as mensagens que enviar.</li>
-<li><b>No seu aparelho:</b> uma cópia para trabalhar sem internet, a fila de vendas por enviar, a sessão e preferências. As cópias de vendas que guardar em ficheiro ficam consigo.</li></ul>
-<h4>3. Câmara</h4>
-<p>A câmara só é usada quando a abre, para ler códigos de barras ou fotografar um produto. A leitura de códigos não guarda imagens; as fotografias de produtos são comprimidas e guardadas num espaço privado da loja.</p>
-<h4>4. Onde ficam e quem os trata</h4>
-<p>Os dados ficam na plataforma Supabase (base de dados, autenticação e armazenamento), em servidores na Europa, fora de Moçambique. O código da aplicação é distribuído pelo GitHub e por serviços de alojamento web. A aplicação carrega tipos de letra da Google, e a aplicação Android consulta o GitHub para saber se há versão nova; nestes pedidos o fornecedor vê o endereço de internet do aparelho. Estes serviços não recebem as vendas nem os dados das lojas.</p>
-<h4>5. Segurança</h4>
-<p>Cada loja está isolada das outras por regras na base de dados; as permissões são verificadas no servidor e não só no ecrã; as ligações são cifradas; e ações sensíveis ficam registadas. Nenhum sistema é infalível: guarde bem a sua senha.</p>
-<h4>6. Quem vê o quê</h4>
+<div class="card" style="margin:8px 0"><b>Em resumo</b>
+<ul><li>Usamos só os dados necessários para a loja funcionar: vender, controlar o stock, fechar o caixa e gerir a conta.</li>
+<li>Não vendemos os seus dados, não os usamos para publicidade e a aplicação não faz análise nem rastreio do seu comportamento.</li>
+<li>Os dados ficam guardados em servidores seguros fora de Moçambique, e cada loja só vê os seus.</li>
+<li>Pode pedir para ver, corrigir ou apagar os seus dados.</li></ul></div>
+<h4>1. Dados que tratamos e para quê</h4>
+<ul><li><b>Conta:</b> nome, e-mail, cargo, fotografia de perfil (opcional) e data do último acesso, para o identificar e aplicar as suas permissões. A senha nunca é guardada em texto legível; o código de acesso dos funcionários é guardado só de forma cifrada.</li>
+<li><b>Loja:</b> nome, tipo de negócio, NUIT, telefone, endereço, estado da subscrição e comprovativos de pagamento, para gerir o serviço.</li>
+<li><b>Atividade da loja:</b> produtos, preços, stock e validades, fotografias de produtos, vendas e quem as fez, clientes (nome, telefone e dívida), recebimentos, despesas, fechos de caixa, notificações e um registo de ações importantes, para o funcionamento diário e os relatórios.</li>
+<li><b>Suporte:</b> as mensagens que enviar.</li>
+<li><b>No seu aparelho:</b> uma cópia para trabalhar sem internet, as vendas por enviar, a sessão e preferências.</li></ul>
+<h4>2. Câmara</h4>
+<p>A câmara só é usada quando a abre, para ler códigos de barras ou fotografar um produto. A leitura de códigos não guarda imagens; as fotografias de produtos ficam num espaço privado da loja.</p>
+<h4>3. Quem recebe os dados</h4>
+<p>Os dados são tratados por fornecedores que nos prestam serviços: <b>alojamento e base de dados na nuvem</b> (servidores na Europa, fora de Moçambique), <b>serviços de distribuição da aplicação e das atualizações</b> e um <b>serviço externo de tipos de letra</b>. Estes fornecedores tratam os dados só para nos prestar o serviço. Não vendemos nem cedemos dados a terceiros para outros fins, salvo se a lei o exigir.</p>
+<p><b>Endereço de internet (IP):</b> sempre que a aplicação se liga à internet, o fornecedor que a serve e o serviço de tipos de letra podem ver o endereço IP do aparelho e a data do pedido. Os fornecedores de distribuição da aplicação e de tipos de letra não recebem as vendas nem os dados das lojas.</p>
+<h4>4. Quem vê o quê</h4>
 <p>O dono vê tudo da sua loja. O gerente e o caixa veem só o que o seu cargo permite (o caixa não vê custos, lucros nem despesas). A administração do GestMZ vê dados básicos e de contacto das lojas, a subscrição, comprovativos e pedidos de suporte; no uso normal não consulta as vendas nem o stock.</p>
-<h4>7. Quanto tempo guardamos</h4>
+<h4>5. Como protegemos</h4>
+<p>Cada loja está isolada das outras; as permissões são verificadas no servidor e não só no ecrã; as ligações são cifradas e as ações sensíveis ficam registadas. Nenhum sistema é infalível: guarde bem a sua senha.</p>
+<h4>6. Quanto tempo guardamos</h4>
 <p>Os dados ficam enquanto a conta existir. Não os apagamos automaticamente; pode pedir a eliminação (ver abaixo), salvo o que a lei obrigar a manter.</p>
-<h4>8. Os seus direitos</h4>
-<p>Pode pedir para ver os seus dados, corrigi-los, eliminá-los (quando a lei o permitir) ou receber uma cópia dos dados da loja. Peça a: ${contacto()}. Os dados de clientes da loja são da responsabilidade da loja: registe apenas o necessário.</p>
-<h4>9. Menores e alterações</h4>
+<h4>7. Os seus direitos</h4>
+<p>Pode pedir para ver os seus dados, corrigi-los, eliminá-los (quando a lei o permitir), opor-se ao tratamento ou receber uma cópia dos dados da loja. Peça a: ${contacto()}. Os dados de clientes da loja são da responsabilidade da loja: registe apenas o necessário.</p>
+<h4>8. Menores e alterações</h4>
 <p>O GestMZ é de uso profissional e não se destina a menores de 18 anos. Se esta política mudar de forma relevante, a aplicação pede nova aceitação.</p>`
     }
   };

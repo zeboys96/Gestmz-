@@ -20,7 +20,17 @@ test('barra inferior: visível, não cortada, sem tapar conteúdo (tamanhos × p
         const fim = r($('#fim')); return { vh: innerHeight, vw: innerWidth, side, bt, fimBottom: fim.bottom, sw: document.documentElement.scrollWidth }; });
       const id = `${w}x${h} ${papel} sab=${sab}`;
       if (erros.length) falhas.push(id + ': erros JS ' + erros);
-      if (w <= 900) {
+      const calha = w <= 900 && h <= 520 && w > h;   // telemóvel deitado (pouca altura): o menu é uma coluna à esquerda, não uma barra em baixo
+      if (calha) {
+        if (m.side.left > 1 || m.side.top > 1 || Math.abs(m.side.bottom - m.vh) > 1) falhas.push(`${id}: a coluna do menu não ocupa a altura toda à esquerda ${JSON.stringify(m.side)}`);
+        if (m.side.width > 110) falhas.push(`${id}: coluna do menu larga demais (${m.side.width})`);
+        if (m.sw > m.vw + 1) falhas.push(`${id}: scroll horizontal da página (${m.sw} > ${m.vw})`);
+        const cont = await p.evaluate(() => { const mm = document.querySelector('main').getBoundingClientRect(), sd = document.querySelector('.side').getBoundingClientRect(); return mm.left >= sd.right - 1; });
+        if (!cont) falhas.push(`${id}: o conteúdo fica por baixo da coluna do menu`);
+        // todas as opções ficam acessíveis: cada botão consegue ser levado para dentro da coluna (a coluna rola na vertical)
+        const fora = await p.evaluate(() => { const sd = document.querySelector('.side').getBoundingClientRect(), maus = []; document.querySelectorAll('#nav button').forEach(b => { b.scrollIntoView({ block: 'nearest' }); const r = b.getBoundingClientRect(); if (r.height < 30 || r.top < sd.top - 1 || r.bottom > sd.bottom + 1 || r.left < -1 || r.right > sd.right + 1) maus.push(b.textContent.trim()); }); return maus; });
+        if (fora.length) falhas.push(`${id}: opções inacessíveis na coluna: ${fora.join(',')}`);
+      } else if (w <= 900) {
         if (Math.abs(m.side.bottom - m.vh) > 1) falhas.push(`${id}: a barra não está colada ao fundo (${m.side.bottom} vs ${m.vh})`);
         if (m.side.height < 62 + sab - 1) falhas.push(`${id}: barra baixa demais (${m.side.height})`);
         const util = m.side.bottom - sab; const cort = m.bt.filter(x => x.r.height < 40 || x.r.bottom > util + 1 || x.r.top < m.side.top - 1);

@@ -83,7 +83,7 @@ VIEWS.equipa = async function () {
   <div class="card"><b>Como dar acesso a um funcionário:</b> toque em <b>Novo funcionário</b>, escreva o nome, o e-mail e uma senha, escolha o cargo (${dono ? 'gerente ou caixa' : 'caixa'}) e defina um <b>código de acesso</b> de 6 a 10 números. Dê-lhe o e-mail, a senha e o código. Ao entrar, o funcionário vê o seu nome e a sua foto e digita o código para abrir o sistema.</div>
   <div class="team">${S.equipa.map(u => `<div class="member" ${u.ativo ? '' : 'style="opacity:.55"'}>${avatar(u, 'lg')}<div class="info"><b>${esc(u.nome)}</b><span class="muted small">${PAPEL[u.papel]}${u.email ? ' · ' + esc(u.email) : ''}</span><br><span class="small"><span class="dot ${online(u) ? 'on' : ''}"></span> ${u.ativo ? quando(u.ultimo_acesso) : 'acesso retirado'}</span>${gere(u) ? `<br><button class="link small" data-id="${u.id}">Editar ou remover</button>` : ''}</div></div>`).join('')}</div>`;
   $('#novo').onclick = () => formEquipa();
-  $('#main').onclick = e => { const b = e.target.closest('button.link'); if (b) formEquipa(S.equipa.find(u => u.id === b.dataset.id)); };
+  $('#main').onclick = e => { const b = e.target.closest('button.link[data-id]'); if (b) formEquipa(S.equipa.find(u => u.id === b.dataset.id)); };
 };
 function fotoCampo(atual) {
   return `<div class="foto-campo"><span class="lbl">Foto (opcional)</span><img class="preview" id="fotoprev" ${atual ? `src="${esc(atual)}"` : 'hidden'} alt="Pré-visualização" style="max-height:96px;border-radius:50%">
@@ -118,7 +118,7 @@ function formEquipa(u) {
           await q(sb.rpc('criar_perfil', { p_user: data.user.id, p_nome: d.nome, p_email: email, p_papel: d.papel, p_pin: pin }));
           if (foto) await q(sb.from('perfis').update({ foto }).eq('id', data.user.id));
         } finally { aux.auth.signOut().catch(() => { }); }
-        if (!data.session) toast('Criado, mas o Supabase pede confirmação por e-mail. Desligue "Confirm email" (veja o LEIA-ME).', true); else toast('Funcionário criado. Dê-lhe o e-mail, a senha e o código de acesso.');
+        if (!data.session) toast('Criado, mas o servidor pede confirmação por e-mail. Contacte o suporte do GestMZ.', true); else toast('Funcionário criado. Dê-lhe o e-mail, a senha e o código de acesso.');
       } else {
         const o = { nome: d.nome.trim(), papel: d.papel, ativo: !!d.ativo }; if (foto) o.foto = foto;
         await q(sb.from('perfis').update(o).eq('id', u.id));

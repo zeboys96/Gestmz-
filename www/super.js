@@ -99,7 +99,7 @@ function formLojista() {
       if (!data.user || (data.user.identities && data.user.identities.length === 0)) throw new Error('Este e-mail já tem conta no sistema.');
       aux.auth.signOut().catch(() => { });
       await q(sb.rpc('cadastrar_lojista', { p_user: data.user.id, p_email: email, p_loja_nome: d.loja }));
-      if (!data.session) toast('Criada, mas o Supabase pede confirmação por e-mail. Desligue "Confirm email" (veja o LEIA-ME).', true);
+      if (!data.session) toast('Criada, mas o servidor pede confirmação por e-mail. Contacte o suporte do GestMZ.', true);
       const url = location.origin + location.pathname.replace(/index\.html$/, '');
       const msg = `Olá! O seu acesso ao GestMZ já está criado.\nEndereço: ${url}\nE-mail: ${email}\nSenha: ${d.senha}\nNa primeira vez, preencha os dados da sua loja.`;
       go('s_lojas', true);
