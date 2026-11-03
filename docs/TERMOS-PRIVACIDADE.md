@@ -9,3 +9,7 @@ Implementação: `www/legal.js`. Testes: `tests/legal.test.js` (inclui a Ajuda p
 - **Removido por não ser prática do sistema:** retenção de 90 dias, reembolsos, limite de responsabilidade e renovação — o sistema não os aplica. Se quiser tê-los, são decisões comerciais a incluir depois.
 - **Contacto:** funcionários → dono da loja; dono → separador «Suporte». `CONTACTO` em `legal.js` fica vazio até o responsável indicar um e-mail ou telefone público.
 - **Aviso:** texto de boa-fé; convém revisão por um advogado em Moçambique antes de vender amplamente.
+
+## Atualização 03/11/2026 (versão 1.1.1)
+- Política de privacidade reescrita sem nomes de marcas nem termos técnicos: resumo inicial, dados e finalidade, câmara, destinatários (categorias de fornecedores, incluindo o endereço IP), quem vê o quê, proteção, conservação e direitos. `VERSAO` mantém-se em `2026-11-01` (clarificação, não alteração relevante): ninguém é obrigado a aceitar de novo.
+- Corrigido: tocar no X dos Termos/Privacidade (em «Conta») abria «Novo funcionário». Causa: o ecrã «Equipa» deixava um `onclick` no `<main>` que apanhava qualquer botão `.link`; cada ecrã novo passa a ter um `<main>` limpo e o manipulador só aceita botões com `data-id`.
