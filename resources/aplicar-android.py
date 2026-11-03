@@ -72,6 +72,49 @@ if extra:
     open(MANIFESTO, 'w', encoding='utf-8').write(man)
 if 'android.permission.CAMERA' not in open(MANIFESTO, encoding='utf-8').read(): erro('a permissão CAMERA não ficou no manifesto')
 
+# 4b) instalador de atualizações dentro da app: plugin nativo + FileProvider + permissão de instalação.
+#     A app descarrega o APK para a sua cache, confere o SHA-256 e abre o instalador do Android (a pessoa confirma sempre).
+JAVA = os.path.join(RAIZ, 'android', 'app', 'src', 'main', 'java', 'mz', 'gestmz', 'app')
+MAIN = os.path.join(JAVA, 'MainActivity.java')
+if not os.path.isfile(MAIN): erro('não encontrei MainActivity.java em ' + os.path.relpath(JAVA, RAIZ))
+ma = open(MAIN, encoding='utf-8').read()
+if 'extends BridgeActivity' not in ma or 'package mz.gestmz.app' not in ma: erro('MainActivity.java não tem a forma esperada (modelo do Capacitor mudou).')
+shutil.copy2(os.path.join(RAIZ, 'resources', 'android', 'java', 'GestMZInstalador.java'), os.path.join(JAVA, 'GestMZInstalador.java'))
+if 'registerPlugin(GestMZInstalador.class)' not in ma:
+    open(MAIN, 'w', encoding='utf-8').write("""package mz.gestmz.app;
+
+import android.os.Bundle;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(GestMZInstalador.class);
+        super.onCreate(savedInstanceState);
+    }
+}
+""")
+man = open(MANIFESTO, encoding='utf-8').read()
+if 'REQUEST_INSTALL_PACKAGES' not in man:
+    if '</manifest>' not in man: erro('AndroidManifest.xml sem </manifest>')
+    man = man.replace('</manifest>', '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>')
+if 'gestmzprovider' not in man:
+    if '</application>' not in man: erro('AndroidManifest.xml sem </application>')
+    man = man.replace('</application>', """    <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.gestmzprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/gestmz_file_paths" />
+        </provider>
+    </application>""")
+open(MANIFESTO, 'w', encoding='utf-8').write(man)
+man = open(MANIFESTO, encoding='utf-8').read()
+for k in ('REQUEST_INSTALL_PACKAGES', 'gestmzprovider', 'gestmz_file_paths'):
+    if k not in man: erro('o manifesto não ficou com ' + k)
+if not os.path.isfile(os.path.join(RES, 'xml', 'gestmz_file_paths.xml')): erro('falta res/xml/gestmz_file_paths.xml')
+print('instalador de atualizações ligado (plugin, FileProvider, permissão)')
+
 # 5) versão (package.json é a fonte única) e assinatura de produção (só quando o CI fornece o keystore)
 def aviso(m): print('::warning title=Versão GestMZ::' + m); print('AVISO: ' + m)
 exigir = os.environ.get('GESTMZ_EXIGIR_VERSAO') == '1'      # o workflow de versões exige; o apk.yml antigo só avisa
