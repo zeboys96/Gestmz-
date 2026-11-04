@@ -253,7 +253,7 @@ function abrirCategorias(atual, onPick) {
       : `<div class="empty">${S.cats.length ? 'Nenhuma categoria com esse nome. Pode criá-la em baixo.' : 'Ainda não há categorias. Escreva o nome em baixo e toque em Criar.'}</div>`;
   };
   const carrega = async () => {
-    lista.innerHTML = '<div class="loading">A carregar categorias…</div>';
+    lista.innerHTML = loaderHTML('A carregar categorias', 'min-height:90px');
     try { await carregarCats(); mostra(); }
     catch (e) { lista.innerHTML = `<div class="msg bad">Não foi possível carregar as categorias.<br><span class="small">${esc(e.message)}</span></div><button type="button" class="btn ghost" id="cre">Tentar de novo</button>`; $('#cre', el).onclick = carrega; }
   };

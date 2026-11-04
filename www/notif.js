@@ -72,7 +72,7 @@ function abrirNotificacoes() {
   if (NOTIF.painel) return;
   const el = document.createElement('div'); el.className = 'sheet'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Notificações');
   el.innerHTML = `<div class="sheet-box"><div class="mh"><b>Notificações</b><div class="act" style="gap:6px"><button type="button" class="btn ghost sm" id="ntTodas">Marcar todas como lidas</button><button type="button" class="x" data-x aria-label="Fechar">✕</button></div></div>
-    <div class="sheet-b" id="ntLista" aria-live="polite"><div class="loading" style="padding:30px">A carregar…</div></div><div class="sheet-f" id="ntMais" hidden><button type="button" class="btn ghost block" id="ntMaisBtn">Mostrar anteriores</button></div></div>`;
+    <div class="sheet-b" id="ntLista" aria-live="polite">${loaderHTML('A carregar', 'min-height:90px')}</div><div class="sheet-f" id="ntMais" hidden><button type="button" class="btn ghost block" id="ntMaisBtn">Mostrar anteriores</button></div></div>`;
   document.body.appendChild(el); NOTIF.painel = { el, itens: [], fim: false };
   const fechar = () => { document.removeEventListener('keydown', tecla); el.remove(); NOTIF.painel = null; };
   const tecla = e => { if (e.key === 'Escape') fechar(); };

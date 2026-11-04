@@ -12,9 +12,9 @@
   function ind() {
     if (el && el.isConnected) return el;
     el = document.createElement('div'); el.id = 'ptr'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); el.hidden = true;
-    el.innerHTML = '<span class="ptr-i" aria-hidden="true"></span><span class="ptr-t"></span>'; document.body.appendChild(el); return el;
+    el.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.5 3.5v4.2h-4.2"/></svg>'; document.body.appendChild(el); return el;
   }
-  const mostrar = (txt, y, estado) => { const e = ind(); e.hidden = false; e.dataset.estado = estado || ''; e.style.transform = 'translate(-50%,' + Math.round(y) + 'px)'; e.querySelector('.ptr-t').textContent = txt; };
+  const mostrar = (y, estado, prog) => { const e = ind(); e.hidden = false; e.dataset.estado = estado || ''; e.style.transform = 'translate(-50%,' + Math.round(y) + 'px)'; e.style.opacity = estado === 'puxar' ? String(Math.max(.35, Math.min(1, prog || 0))) : '1'; const sv = e.querySelector('svg'); if (sv) sv.style.transform = estado === 'puxar' ? 'rotate(' + Math.round((prog || 0) * 270) + 'deg)' : ''; e.setAttribute('aria-label', estado === 'a-atualizar' ? 'A atualizar' : ''); };
   const esconder = () => { if (!el) return; el.hidden = true; el.dataset.estado = ''; };
   /* guarda e repõe o que o utilizador tinha escrito nos campos do ecrã (por id) */
   function guardarCampos() {
@@ -48,13 +48,13 @@
     if (!g) return; const t = e.touches[0], dy = t.clientY - g.y, dx = t.clientX - g.x;
     if (!g.ativo) { if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) { g = null; return; } if (dy < -6) { g = null; return; } if (dy < 12) return; if (!topo()) { g = null; return; } g.ativo = true; }
     g.dy = Math.min(MAX, (dy - 12) * 0.55); if (e.cancelable) e.preventDefault();
-    mostrar(g.dy >= LIMITE ? 'Solte para atualizar' : 'Puxe para atualizar', g.dy - 40, g.dy >= LIMITE ? 'pronto' : 'puxar');
+    mostrar(g.dy - 40, g.dy >= LIMITE ? 'pronto' : 'puxar', g.dy / LIMITE);
   }, { passive: false });
   const fim = async () => {
     const x = g; g = null; if (!x || !x.ativo) return;
     if (x.dy < LIMITE) { esconder(); return; }
-    mostrar('A atualizar…', 22, 'a-atualizar'); const r = await atualizar();
-    if (r === 'ok') { mostrar('Atualizado', 22, 'ok'); setTimeout(esconder, 900); } else esconder();
+    mostrar(22, 'a-atualizar'); const r = await atualizar();
+    esconder();   // o aviso «Atualizado.» aparece só em baixo (toast); aqui o indicador simplesmente desaparece
   };
   document.addEventListener('touchend', fim, { passive: true }); document.addEventListener('touchcancel', () => { g = null; esconder(); }, { passive: true });
   const atualizandoAgora = () => !!(el && el.dataset.estado === 'a-atualizar');
