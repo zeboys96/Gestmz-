@@ -3,20 +3,20 @@
   "atualizado_em": "2026-11-04",
   "plataformas": {
     "android": {
-      "ultima": "1.1.3",
+      "ultima": "1.1.4",
       "minima": "1.0.0",
       "bloquear": false,
       "publicada_em": "2026-11-04",
-      "url": "https://github.com/zeboys96/Gestmz-/releases/download/v1.1.3/GestMZ-1.1.3-android.apk",
-      "sha256": "1c9713537bf157ecf01a5cf7ac113f83a828f6ccef145c7b14bbffdb5b99250f",
+      "url": "https://github.com/zeboys96/Gestmz-/releases/download/v1.1.4/GestMZ-1.1.4-android.apk",
+      "sha256": "b09a66d1e9842e8c1fc3f756536f8905f4e6c0c50a53f8a3df52de200fbfde53",
       "notas": [
-        "Corrigida a ordem ao entrar: termos, depois dicas",
-        "O aviso de atualização só aparece depois de entrar na loja"
+        "Transferência da atualização feita dentro da aplicação, mais fiável",
+        "A app procura atualizações ao voltar a ser aberta"
       ],
       "requisitos": {
         "android_min": 8
       },
-      "tamanho": 3410959
+      "tamanho": 3412513
     },
     "windows": {
       "ultima": null,
