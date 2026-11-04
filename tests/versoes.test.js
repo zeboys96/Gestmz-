@@ -82,7 +82,7 @@ test('atualizar-versions.js: calcula o SHA-256, gera o endereço e recusa versõ
   fs.mkdirSync(path.join(alt, 'www'), { recursive: true }); fs.mkdirSync(path.join(alt, 'scripts'));
   fs.copyFileSync(path.join(R, 'www', 'atualizacao.js'), path.join(alt, 'www', 'atualizacao.js')); fs.writeFileSync(path.join(alt, 'www', 'versions.json'), JSON.stringify(pub));
   fs.copyFileSync(path.join(R, 'scripts', 'atualizar-versions.js'), path.join(alt, 'scripts', 'atualizar-versions.js'));
-  const r2 = cp.spawnSync(process.execPath, [path.join(alt, 'scripts', 'atualizar-versions.js'), '--plataforma', 'android', '--versao', '1.0.5', '--ficheiro', f, '--saida', path.join(t, 'q.json')], { encoding: 'utf8' });
+  const r2 = cp.spawnSync(process.execPath, [path.join(alt, 'scripts', 'atualizar-versions.js'), '--plataforma', 'android', '--versao', '1.0.5', '--ficheiro', (fs.copyFileSync(f, path.join(t, 'GestMZ-1.0.5-android.apk')), path.join(t, 'GestMZ-1.0.5-android.apk')), '--saida', path.join(t, 'q.json')], { encoding: 'utf8' });
   assert.notEqual(r2.status, 0); assert.match(r2.stderr, /não é maior/);
 });
 
@@ -146,4 +146,14 @@ test('versao.yml: sem gatilho temporário por push; a candidata só se lança à
   const y = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '.github', 'workflows', 'versao.yml'), 'utf8');
   assert.ok(!/^\s*push:/m.test(y) && !y.includes('desenvolvimento/atualizacoes'), 'o gatilho temporário foi removido');
   assert.ok(/workflow_dispatch:/.test(y) && /environment: aprovacao-release/.test(y) && /--draft/.test(y), 'só rascunho, com aprovação');
+});
+
+test('versions.json: o endereço do APK tem exatamente o nome do ficheiro da Release (GestMZ-<versão>-android.apk)', () => {
+  const e = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'www', 'versions.json'), 'utf8')).plataformas.android;
+  assert.strictEqual(e.url, 'https://github.com/zeboys96/Gestmz-/releases/download/v' + e.ultima + '/GestMZ-' + e.ultima + '-android.apk');
+  assert.match(e.sha256, /^[0-9a-f]{64}$/);
+});
+test('atualizar-versions.js recusa um APK cujo nome não seja GestMZ-<versão>-android.apk', () => {
+  const r = cp.spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'atualizar-versions.js'), '--plataforma', 'android', '--versao', '9.9.9', '--ficheiro', __filename, '--saida', '/dev/null'], { encoding: 'utf8' });
+  assert.notStrictEqual(r.status, 0); assert.match(r.stderr + r.stdout, /GestMZ-9\.9\.9-android\.apk/);
 });
