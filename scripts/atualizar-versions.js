@@ -15,6 +15,7 @@ if (!fich || !fs.existsSync(fich)) sai('--ficheiro não existe');
 if (!saida) sai('--saida em falta (este script nunca altera www/versions.json sozinho)');
 const nome = path.basename(fich);
 if (!/^[A-Za-z0-9._-]+$/.test(nome)) sai('nome de ficheiro com caracteres não permitidos');
+if (plat === 'android' && nome !== 'GestMZ-' + ver + '-android.apk') sai('o ficheiro tem de se chamar GestMZ-' + ver + '-android.apk (o nome entra no endereço de transferência)');
 const atual = JSON.parse(fs.readFileSync(path.join(R, 'www', 'versions.json'), 'utf8'));
 const ant = atual.plataformas[plat];
 if (ant.ultima && A.comparar(ver, ant.ultima) <= 0) sai('a versão ' + ver + ' não é maior do que a já publicada (' + ant.ultima + ')');
