@@ -314,6 +314,8 @@ async function vSetupSuper() {
 }
 async function sair() {
   pararRT(); cart = []; limparCache();
+  if (window.GestMZAtualizacao) GestMZAtualizacao.fechar();
+  document.querySelectorAll('.modal').forEach(m => m.remove());   // nada da sessão anterior (guia, termos, avisos) fica por cima do login
   try { await sb.auth.signOut(); } catch (e) { /* ok */ }
   S = { perfil: null, loja: null, plat: null, cats: [], produtos: [], clientes: [], equipa: [] };
   netUpdate(); vLogin();
@@ -338,7 +340,7 @@ async function entrar() {
     if (!perfil) return vSemAcesso();
     if (!perfil.ativo) { await sb.auth.signOut(); return vLogin('Esta conta foi desativada. Fale com o dono da loja.'); }
     S.perfil = perfil;
-    if (perfil.papel === 'super') { await carregarSuper(); shell(navSuper()); iniciarSuperRT(); return go('s_lojas'); }
+    if (perfil.papel === 'super') { await carregarSuper(); shell(navSuper()); iniciarSuperRT(); go('s_lojas'); if (window.GestMZAtualizacao) GestMZAtualizacao.aposEntrar(); return; }
     if (perfil.papel !== 'dono' && await q(sb.rpc('pin_exigido'))) {   // o servidor só abre os dados depois do código de acesso
       const lb = await q(sb.rpc('loja_basica'));
       if (!lb) return vSemAcesso();
@@ -347,7 +349,7 @@ async function entrar() {
     const lj = await lerLojaInfo(perfil.loja_id);
     if (!lj) return vSemAcesso();
     if (perfil.papel === 'dono' && lj.configurada === false) return vConfigurarLoja(perfil, lj);
-    await carregarLoja(); S.offline = false; shell(navLoja()); iniciarRT(); go(perfil.papel === 'caixa' ? 'pdv' : 'painel'); primeiraAjuda(); sincronizarFila(); netUpdate(); if (window.GestLegal) GestLegal.exigirAceitacao();
+    await carregarLoja(); S.offline = false; shell(navLoja()); iniciarRT(); go(perfil.papel === 'caixa' ? 'pdv' : 'painel'); sincronizarFila(); netUpdate(); await fimDaEntrada();
   } catch (e) { if (ehRede(e) && jGet('gestmz_cache', null)) return entrarOffline(); vErro(e.message); }
 }
 
@@ -562,6 +564,13 @@ function autorizar(texto, acao, detalhe) {
 }
 
 /* ---------- ajuda: primeiro uso ---------- */
+/* Ordem na entrada: 1) termos (se faltarem) 2) guia de dicas, só para quem aceitou 3) aviso de atualização, já com a loja aberta. */
+async function fimDaEntrada() {
+  const ok = window.GestLegal ? await GestLegal.exigirAceitacao() : true;
+  if (!ok || !S.perfil) return;   // escolheu «Sair»: nada mais aparece
+  primeiraAjuda();
+  if (window.GestMZAtualizacao) GestMZAtualizacao.aposEntrar();
+}
 function primeiraAjuda() { const k = 'gestmz_ajuda_' + S.perfil.id; if (!lsGet(k)) { lsSet(k, '1'); if (VIEWS.ajudaSlides) VIEWS.ajudaSlides(); } }
 
 /* campos: ao tocar, selecciona o conteúdo (números pré-preenchidos como 0 ou 10 apagam-se ao escrever) e garante que ficam visíveis acima do teclado */
