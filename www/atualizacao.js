@@ -140,12 +140,24 @@
      pacote e abre o instalador do Android (que só aceita o mesmo certificado e pede sempre a confirmação). Se esta app não tiver os plugins
      (versão antiga) ou falhar, o utilizador pode usar o navegador como último recurso. Devolve 'instalador' | 'permissao' | lança erro. */
   const DIR_UPD = 'gestmz-update';
-  function nativo() { const P = (raiz.Capacitor && raiz.Capacitor.Plugins) || {}; return P.Filesystem && P.Filesystem.downloadFile && P.GestMZInstalador && P.GestMZInstalador.instalar ? P : null; }
+  function nativo() { const P = (raiz.Capacitor && raiz.Capacitor.Plugins) || {}; const I = P.GestMZInstalador; return I && I.instalar && (I.transferir || (P.Filesystem && P.Filesystem.downloadFile)) ? P : null; }
   async function transferirAndroid(d, aoProgresso) {
     const P = nativo(); if (!P) throw new Error('sem-nativo');
     if (!PADRAO_URL.test(d.url) || !/^[0-9a-f]{64}$/i.test(d.sha256 || '')) throw new Error('entrada');
     const { pode } = await P.GestMZInstalador.podeInstalar();
     if (!pode) { try { await P.GestMZInstalador.abrirPermissao(); } catch (e) { /* ok */ } return 'permissao'; }
+    const I = P.GestMZInstalador;
+    if (I.transferir) {   // descarregador próprio do plugin nativo (versões 1.1.4 em diante)
+      let ouv = null;
+      try {
+        if (I.addListener) ouv = await I.addListener('progresso', pr => { if (pr && pr.total > 0 && aoProgresso) aoProgresso(Math.min(100, Math.round(pr.bytes * 100 / pr.total))); });
+        const r = await I.transferir({ url: d.url, sha256: d.sha256 });
+        if (!r || !r.caminho) throw new Error('sem-ficheiro');
+        if (aoProgresso) aoProgresso(100);
+        await I.instalar({ caminho: r.caminho, sha256: d.sha256 });
+        return 'instalador';
+      } finally { if (ouv && ouv.remove) { try { await ouv.remove(); } catch (e) { /* ok */ } } }
+    }
     try { await P.Filesystem.rmdir({ path: DIR_UPD, directory: 'CACHE', recursive: true }); } catch (e) { /* ainda não existe */ }
     let ouvinte = null;
     try {
@@ -171,7 +183,7 @@
         if (r === 'permissao') { est.textContent = 'Para instalar, permita nesta janela do Android que o GestMZ instale atualizações. Depois volte aqui e toque em «Atualizar».'; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Atualizar ' + d.ultima; ocupado = false; return; }
         est.textContent = 'Transferida. Confirme a instalação no ecrã do Android. Os seus dados mantêm-se.'; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Instalar de novo'; ocupado = false;
       } catch (e) {
-        const c = String(e && (e.message || e)); falhou(/sha256|pacote/.test(c) ? 'A atualização transferida não passou na verificação de segurança e foi descartada. Tente de novo mais tarde.' : navigator.onLine === false ? 'Sem internet. Ligue-se e tente de novo.' : 'Não foi possível transferir a atualização. Tente de novo.');
+        const c = String(e && (e.message || e)); falhou(/sha256|pacote/.test(c) ? 'A atualização transferida não passou na verificação de segurança e foi descartada. Tente de novo mais tarde.' : navigator.onLine === false ? 'Sem internet. Ligue-se e tente de novo.' : 'Não foi possível transferir a atualização. Tente de novo.' + (/^[a-z0-9-]{2,20}$/.test(c) ? ' (código: ' + c + ')' : ''));
       }
     };
   }
