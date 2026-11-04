@@ -15,9 +15,9 @@ const VERSOES = { esquema: 1, atualizado_em: '2026-11-04', plataformas: { androi
 // opc: { pode, nativo, instalarErro, lento }
 const INIT = opc => `(function(){ const o = ${JSON.stringify(opc)}; window.__l = { dl: 0, inst: [], perm: 0, br: [], rm: 0, ouv: 0, rem: 0 }; let cb = null;
   const P = { App: { getInfo: async () => ({ id: 'mz.gestmz.app', version: '1.1.1' }) }, Browser: { open: async x => { window.__l.br.push(x.url); } } };
-  if (o.nativo) { P.Filesystem = { rmdir: async () => { window.__l.rm++; }, addListener: async (n, f) => { cb = f; window.__l.ouv++; return { remove: async () => { window.__l.rem++; } }; },
+  if (o.nativo || o.proprio) { P.Filesystem = { rmdir: async () => { window.__l.rm++; }, addListener: async (n, f) => { cb = f; window.__l.ouv++; return { remove: async () => { window.__l.rem++; } }; },
       downloadFile: async a => { window.__l.dl++; window.__l.dlArgs = a; if (cb) { cb({ bytes: 30, contentLength: 100 }); await new Promise(r => setTimeout(r, o.lento || 50)); cb({ bytes: 100, contentLength: 100 }); } return { path: '/data/user/0/mz.gestmz.app/cache/' + a.path }; } };
-    P.GestMZInstalador = { podeInstalar: async () => ({ pode: o.pode }), abrirPermissao: async () => { window.__l.perm++; }, instalar: async a => { window.__l.inst.push(a); if (o.instalarErro) throw new Error(o.instalarErro); } }; }
+    P.GestMZInstalador = { addListener: async (n, f) => { if (o.proprio) cb = f; return { remove: async () => { window.__l.rem++; } }; }, transferir: o.proprio ? async a => { window.__l.tr = a; if (o.transfErro) throw new Error(o.transfErro); if (cb) { cb({ bytes: 30, total: 100 }); await new Promise(r => setTimeout(r, 50)); cb({ bytes: 100, total: 100 }); } return { caminho: '/data/user/0/mz.gestmz.app/cache/gestmz-update/GestMZ-update.apk' }; } : undefined, podeInstalar: async () => ({ pode: o.pode }), abrirPermissao: async () => { window.__l.perm++; }, instalar: async a => { window.__l.inst.push(a); if (o.instalarErro) throw new Error(o.instalarErro); } }; }
   window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', Plugins: P }; })();`;
 
 async function abrir(b, url, opc) {
@@ -61,4 +61,16 @@ rodar('atualização Android: se a verificação de segurança falhar, mostra o 
 rodar('atualização Android: numa versão antiga da app (sem instalador interno) continua a funcionar pelo navegador', async (b, url) => {
   const { ctx, p } = await abrir(b, url, { nativo: false });
   await p.click('#upd-go'); await p.waitForFunction(() => window.__l.br.length === 1); assert.ok(/releases\/download\/v1\.1\.9\//.test(await p.evaluate(() => window.__l.br[0]))); await ctx.close();
+});
+
+rodar('atualização Android (1.1.4+): usa o descarregador próprio do plugin, com progresso, sem o plugin genérico; o erro mostra um código curto', async (b, url) => {
+  const { ctx, p, erros } = await abrir(b, url, { proprio: true, pode: true });
+  await p.click('#upd-go'); await p.waitForFunction(() => /Confirme a instalação/.test(document.querySelector('#upd-estado').textContent));
+  const l = await p.evaluate(() => window.__l); assert.strictEqual(l.dl, 0, 'não usa o Filesystem'); assert.ok(l.tr.url.endsWith('GestMZ-1.1.9-android.apk')); assert.strictEqual(l.tr.sha256, SHA);
+  assert.strictEqual(l.inst.length, 1); assert.ok(/gestmz-update\/GestMZ-update\.apk$/.test(l.inst[0].caminho)); assert.deepStrictEqual(l.br, [], 'não abre o navegador');
+  assert.ok(!/github/i.test(await p.locator('#upd-estado').innerText()));
+  assert.deepStrictEqual(erros, []); await ctx.close();
+  const f = await abrir(b, url, { proprio: true, pode: true, transfErro: 'http-404' });
+  await f.p.click('#upd-go'); await f.p.waitForFunction(() => /código: http-404/.test(document.querySelector('#upd-estado').textContent));
+  assert.ok(await f.p.locator('#upd-nav').isVisible(), 'aparece a alternativa'); assert.ok(!/github/i.test(await f.p.locator('#upd-estado').innerText())); await f.ctx.close();
 });
