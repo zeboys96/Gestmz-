@@ -1,6 +1,12 @@
 package mz.gestmz.app;
 
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageInstaller;
+import android.content.pm.ResolveInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -16,6 +22,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.List;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.regex.Pattern;
@@ -143,6 +151,71 @@ public class GestMZInstalador extends Plugin {
         }).start();
     }
 
+    private static final String ACAO = "mz.gestmz.app.INSTALACAO";
+    private BroadcastReceiver recetor;
+
+    private void registarRecetor() {
+        if (recetor != null) return;
+        recetor = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context ctx, Intent it) {
+                int estado = it.getIntExtra(PackageInstaller.EXTRA_STATUS, -1);
+                if (estado == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                    Intent conf = (Intent) it.getParcelableExtra(Intent.EXTRA_INTENT);
+                    if (conf != null) {
+                        conf.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        ctx.startActivity(conf);   // ecrã do Android a pedir a confirmação
+                    }
+                } else if (estado != PackageInstaller.STATUS_SUCCESS) {
+                    JSObject r = new JSObject();
+                    r.put("codigo", estado);
+                    r.put("mensagem", String.valueOf(it.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)));
+                    notifyListeners("instalacao", r);
+                }
+            }
+        };
+        IntentFilter fl = new IntentFilter(ACAO);
+        if (Build.VERSION.SDK_INT >= 33) getContext().registerReceiver(recetor, fl, 4);   // 4 = RECEIVER_NOT_EXPORTED
+        else getContext().registerReceiver(recetor, fl);
+    }
+
+    private void instalarPorSessao(File f) throws Exception {
+        Context ctx = getContext();
+        registarRecetor();
+        PackageInstaller pi = ctx.getPackageManager().getPackageInstaller();
+        PackageInstaller.SessionParams sp = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+        sp.setAppPackageName(ctx.getPackageName());
+        int id = pi.createSession(sp);
+        PackageInstaller.Session sessao = pi.openSession(id);
+        try {
+            try (InputStream in = new FileInputStream(f); OutputStream out = sessao.openWrite("gestmz", 0, f.length())) {
+                byte[] buf = new byte[65536];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                sessao.fsync(out);
+            }
+            Intent it = new Intent(ACAO).setPackage(ctx.getPackageName());
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? 33554432 : 0);   // 33554432 = FLAG_MUTABLE
+            PendingIntent pend = PendingIntent.getBroadcast(ctx, id, it, flags);
+            sessao.commit(pend.getIntentSender());
+        } catch (Exception e) {
+            try { sessao.abandon(); } catch (Exception x) { /* ok */ }
+            throw e;
+        } finally {
+            sessao.close();
+        }
+    }
+
+    private void instalarPorVista(File f) {
+        Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".gestmzprovider", f);
+        Intent i = new Intent(Intent.ACTION_VIEW);
+        i.setDataAndType(uri, "application/vnd.android.package-archive");
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        List<ResolveInfo> lista = getContext().getPackageManager().queryIntentActivities(i, 0);
+        if (lista != null) for (ResolveInfo ri : lista) getContext().grantUriPermission(ri.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        getContext().startActivity(i);
+    }
+
     @PluginMethod
     public void instalar(PluginCall call) {
         try {
@@ -173,11 +246,11 @@ public class GestMZInstalador extends Plugin {
                 call.reject("pacote");
                 return;
             }
-            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".gestmzprovider", f);
-            Intent i = new Intent(Intent.ACTION_VIEW);
-            i.setDataAndType(uri, "application/vnd.android.package-archive");
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(i);
+            try {
+                instalarPorSessao(f);   // caminho principal: a app entrega os bytes ao instalador do Android, sem endereços temporários
+            } catch (Exception e) {
+                instalarPorVista(f);    // alternativa para aparelhos que recusem a sessão
+            }
             call.resolve();
         } catch (Exception e) {
             call.reject("erro");
