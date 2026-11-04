@@ -173,6 +173,8 @@
     const w = raiz.modal('Atualização ' + esc(d.ultima), '<p>' + esc(d.texto) + '</p>' + notasHTML(d) + '<p class="muted small" id="upd-estado">' + esc(nativo() ? MSG_ANDROID : MSG_NAVEGADOR) + '</p><div id="upd-barra"></div><button type="button" class="btn block" id="upd-go">Atualizar ' + esc(d.ultima) + '</button><button type="button" class="link small" id="upd-nav" hidden>Transferir pelo navegador</button>', { sticky: true });
     const est = $('#upd-estado', w.m), barra = $('#upd-barra', w.m), go = $('#upd-go', w.m), nav = $('#upd-nav', w.m); let ocupado = false;
     nav.onclick = () => abrirTransferencia(d.url);
+    // o Android pode recusar a instalação depois de a pessoa a iniciar: mostra o motivo (código curto) e oferece a alternativa
+    try { const I = (raiz.Capacitor && raiz.Capacitor.Plugins && raiz.Capacitor.Plugins.GestMZInstalador); if (I && I.addListener) I.addListener('instalacao', ev => { if (!w.m.isConnected) return; falhou('A instalação não foi concluída (código: ' + (ev && ev.codigo != null ? ev.codigo : 'erro') + '). Tente de novo ou use a alternativa abaixo.'); }); } catch (e) { /* ok */ }
     const falhou = msg => { est.textContent = msg; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Tentar de novo'; nav.hidden = false; ocupado = false; };
     go.onclick = async () => {
       if (ocupado) return; ocupado = true;
