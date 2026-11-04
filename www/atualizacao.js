@@ -210,12 +210,17 @@
     const dp = $('[data-depois]', el); if (dp) dp.onclick = () => { adiar(d.ultima); el.remove(); };
   }
   /* O aviso só existe com a sessão aberta (nunca no login, nos termos ou no guia). `aposEntrar` liga-o; `fechar` desliga-o. */
-  let ativo = false, tmr = 0;
+  let ativo = false, tmr = 0, ultimaBusca = 0, ouvinte = false;
+  const ENTRE_BUSCAS = 10 * 60 * 1000;   // ao voltar à app procura de novo, mas no máximo de 10 em 10 minutos
   function sessaoAberta() { return ativo && (typeof S !== 'undefined' && !!(S && S.perfil)) && !document.getElementById('legal-gate'); }
-  function aposEntrar(atraso) { ativo = true; clearTimeout(tmr); tmr = setTimeout(verificarEmSilencio, atraso == null ? 8000 : atraso); }
+  function aposEntrar(atraso) {
+    ativo = true;
+    if (!ouvinte) { ouvinte = true; document.addEventListener('visibilitychange', () => { if (!document.hidden && sessaoAberta() && Date.now() - ultimaBusca >= ENTRE_BUSCAS) verificarEmSilencio(); }); }
+    clearTimeout(tmr); tmr = setTimeout(verificarEmSilencio, atraso == null ? 8000 : atraso); }
   function fechar() { ativo = false; clearTimeout(tmr); document.querySelectorAll('#upd, #upd-modal').forEach(e => e.remove()); }
   async function verificarEmSilencio() {
     if (!sessaoAberta()) return;
+    ultimaBusca = Date.now();
     try {
       const d = await verificar();
       if (!sessaoAberta()) return;

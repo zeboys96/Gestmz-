@@ -59,3 +59,19 @@ test('entrada: depois de aceitar vem o guia (uma vez) e só então, com a loja a
     assert.ok(b0 >= 1); assert.deepStrictEqual(erros, []); await ctx.close();
   } finally { await b.close(); s.close(); }
 });
+
+test('entrada: ao voltar à app (aberta há mais de 10 min) procura atualização de novo; no login nunca', { skip: !chromium && 'playwright indisponível', timeout: 120000 }, async () => {
+  const s = srv(); await new Promise(r => s.listen(0, r)); const url = 'http://127.0.0.1:' + s.address().port + '/'; const b = await chromium.launch();
+  try {
+    const { ctx, p, erros } = await abrir(b, url);
+    await p.evaluate(() => { GestMZAtualizacao.aposEntrar(0); }); await p.waitForSelector('#upd'); const n0 = await p.evaluate(() => window.__buscas);
+    const voltar = () => p.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange')); });
+    await p.evaluate(() => document.getElementById('upd').remove()); await voltar(); await p.waitForTimeout(300);
+    assert.strictEqual(await p.evaluate(() => window.__buscas), n0, 'menos de 10 min: não procura outra vez');
+    await p.evaluate(() => { const d0 = Date.now; Date.now = () => d0() + 11 * 60 * 1000; }); await voltar(); await p.waitForSelector('#upd');
+    assert.strictEqual(await p.evaluate(() => window.__buscas), n0 + 1, 'passados 10 min: procura de novo');
+    await p.evaluate(() => sair()); await p.waitForSelector('#f'); await voltar(); await p.waitForTimeout(300);
+    assert.strictEqual(await p.evaluate(() => window.__buscas), n0 + 1, 'no login não procura'); assert.strictEqual(await visivel(p, '#upd'), 0);
+    assert.deepStrictEqual(erros, []); await ctx.close();
+  } finally { await b.close(); s.close(); }
+});
