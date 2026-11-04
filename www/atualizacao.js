@@ -209,9 +209,16 @@
     $('[data-ver]', el).onclick = () => detalhes(d);
     const dp = $('[data-depois]', el); if (dp) dp.onclick = () => { adiar(d.ultima); el.remove(); };
   }
+  /* O aviso só existe com a sessão aberta (nunca no login, nos termos ou no guia). `aposEntrar` liga-o; `fechar` desliga-o. */
+  let ativo = false, tmr = 0;
+  function sessaoAberta() { return ativo && (typeof S !== 'undefined' && !!(S && S.perfil)) && !document.getElementById('legal-gate'); }
+  function aposEntrar(atraso) { ativo = true; clearTimeout(tmr); tmr = setTimeout(verificarEmSilencio, atraso == null ? 8000 : atraso); }
+  function fechar() { ativo = false; clearTimeout(tmr); document.querySelectorAll('#upd, #upd-modal').forEach(e => e.remove()); }
   async function verificarEmSilencio() {
+    if (!sessaoAberta()) return;
     try {
       const d = await verificar();
+      if (!sessaoAberta()) return;
       if ((d.estado === 'disponivel' && !foiAdiado(d.ultima)) || d.estado === 'obrigatoria') mostrarAviso(d);
     } catch (e) { /* nunca incomoda o utilizador */ }
   }
@@ -232,9 +239,8 @@
 
   function iniciar() {
     if (!plataforma()) return;
-    setTimeout(verificarEmSilencio, 6000);
     setInterval(verificarEmSilencio, DOZE_H);
   }
-  raiz.GestMZAtualizacao = Object.assign({ verificar, cartaoConta, iniciar, detalhes }, api);
+  raiz.GestMZAtualizacao = Object.assign({ verificar, cartaoConta, iniciar, detalhes, aposEntrar, fechar }, api);
   iniciar();
 })(typeof window !== 'undefined' ? window : globalThis);

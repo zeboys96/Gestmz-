@@ -89,14 +89,15 @@
     if (error) throw new Error(error.message);
   }
   /* Primeiro acesso (ou nova versão relevante): pede a aceitação. Falha de rede nunca bloqueia a loja. */
+  /* Resolve true quando pode continuar (já aceitou / aceitou agora) e false se escolheu «Sair». */
   async function exigirAceitacao() {
     try {
-      if (!S.perfil || !['dono', 'gerente', 'caixa'].includes(S.perfil.papel)) return;
-      const { data } = await sb.auth.getSession(); const user = data && data.session && data.session.user; if (!user) return;
+      if (!S.perfil || !['dono', 'gerente', 'caixa'].includes(S.perfil.papel)) return true;
+      const { data } = await sb.auth.getSession(); const user = data && data.session && data.session.user; if (!user) return true;
       const meta = user.user_metadata || {};
-      if (meta.termos_versao === VERSAO) { lsSet(chave(user.id), VERSAO); return; }
-      if (lsGet(chave(user.id)) === VERSAO) { guardarAceitacao().catch(() => { }); return; }   // aceitou sem internet: sincroniza agora
-      if (document.getElementById('legal-gate')) return;
+      if (meta.termos_versao === VERSAO) { lsSet(chave(user.id), VERSAO); return true; }
+      if (lsGet(chave(user.id)) === VERSAO) { guardarAceitacao().catch(() => { }); return true; }   // aceitou sem internet: sincroniza agora
+      if (document.getElementById('legal-gate')) return false;
       estilo();
       const m = document.createElement('div'); m.className = 'modal'; m.id = 'legal-gate';
       m.innerHTML = `<div class="box wide" role="dialog" aria-modal="true" aria-labelledby="lg-t"><div class="mh"><b id="lg-t">Termos e privacidade</b></div><div class="mb legal">
@@ -106,18 +107,20 @@
         <span class="ferr" id="lg-er" role="alert"></span>
         <div class="mf"><button type="button" class="btn ghost" id="lg-sair">Sair</button><button type="button" class="btn" id="lg-ok" disabled>Avançar</button></div></div></div>`;
       document.body.appendChild(m);
+      return await new Promise(fim => {
       const ck = m.querySelector('#lg-ck'), ok = m.querySelector('#lg-ok'), er = m.querySelector('#lg-er');
       ck.onchange = () => { ok.disabled = !ck.checked; };
-      m.querySelector('#lg-sair').onclick = () => { m.remove(); sair(); };
+      m.querySelector('#lg-sair').onclick = () => { m.remove(); fim(false); sair(); };
       ok.onclick = async () => {
         ok.disabled = true; er.textContent = '';
-        try { await guardarAceitacao(); lsSet(chave(user.id), VERSAO); m.remove(); toast('Obrigado. Aceitação registada.'); }
+        try { await guardarAceitacao(); lsSet(chave(user.id), VERSAO); m.remove(); toast('Obrigado. Aceitação registada.'); fim(true); }
         catch (x) {
-          if (typeof ehRede === 'function' && ehRede(x)) { lsSet(chave(user.id), VERSAO); m.remove(); toast('Aceitação guardada neste aparelho; fica registada quando houver internet.'); }
+          if (typeof ehRede === 'function' && ehRede(x)) { lsSet(chave(user.id), VERSAO); m.remove(); toast('Aceitação guardada neste aparelho; fica registada quando houver internet.'); fim(true); }
           else { er.textContent = 'Não foi possível registar agora: ' + x.message; ok.disabled = false; }
         }
       };
-    } catch (e) { /* nunca bloquear a loja por causa disto */ }
+      });
+    } catch (e) { return true; /* nunca bloquear a loja por causa disto */ }
   }
   /* cartão em «Conta» */
   function cartaoConta(main) {

@@ -49,19 +49,19 @@ test('legal: no primeiro acesso dono, gerente e caixa aceitam uma vez (versão+d
   const s = srv(); await new Promise(r => s.listen(0, r)); const url = 'http://127.0.0.1:' + s.address().port + '/'; const b = await chromium.launch();
   try {
     for (const papel of ['dono', 'gerente', 'caixa']) {
-      const d = await abrir(b, url, papel); await d.p.evaluate(() => GestLegal.exigirAceitacao()); await d.p.waitForSelector('#legal-gate');
+      const d = await abrir(b, url, papel); await d.p.evaluate(() => { GestLegal.exigirAceitacao(); }); await d.p.waitForSelector('#legal-gate');
       assert.ok(await d.p.locator('#lg-ok').isDisabled(), papel + ': sem marcar não avança'); assert.strictEqual(await d.p.locator('#lg-ok').innerText(), 'Avançar'); assert.strictEqual(await d.p.evaluate(() => window.__upd.length), 0, 'nada gravado antes de aceitar');
       assert.strictEqual(await d.p.locator('#legal-gate [data-legal]').count(), 2, 'só 2 documentos'); assert.ok(!/contrato/i.test(await d.p.locator('#legal-gate').innerText()));
       await d.p.click('#legal-gate [data-legal=privacidade]'); await d.p.waitForSelector('.modal:not(#legal-gate) .legal'); assert.ok(/Política de privacidade/.test(await d.p.locator('.modal:not(#legal-gate)').innerText()), 'dá para ler antes de aceitar');
       await d.p.click('.modal:not(#legal-gate) [data-x]'); await d.p.check('#lg-ck'); assert.ok(await d.p.locator('#lg-ok').isEnabled()); await d.p.click('#lg-ok'); await d.p.waitForSelector('#legal-gate', { state: 'detached' });
       const up = await d.p.evaluate(() => window.__upd), ver = await d.p.evaluate(() => GestLegal.VERSAO); assert.strictEqual(up.length, 1); assert.strictEqual(up[0].data.termos_versao, ver, 'grava a versão'); assert.ok(!isNaN(Date.parse(up[0].data.termos_em)), 'grava data/hora');
-      await d.p.evaluate(() => GestLegal.exigirAceitacao()); await d.p.waitForTimeout(200); assert.strictEqual(await d.p.locator('#legal-gate').count(), 0, 'não repete'); assert.strictEqual(await d.p.evaluate(() => window.__upd.length), 1);
+      await d.p.evaluate(() => { GestLegal.exigirAceitacao(); }); await d.p.waitForTimeout(200); assert.strictEqual(await d.p.locator('#legal-gate').count(), 0, 'não repete'); assert.strictEqual(await d.p.evaluate(() => window.__upd.length), 1);
       await d.p.evaluate(() => { window.__meta.termos_versao = '2000-01-01'; localStorage.clear(); GestLegal.exigirAceitacao(); }); await d.p.waitForSelector('#legal-gate'); assert.deepStrictEqual(d.erros, []); await d.ctx.close();
     }
     // quem já aceitou esta versão (consentimento existente) não é bloqueado
     const j = await abrir(b, url, 'caixa'); await j.p.evaluate(() => { window.__meta.termos_versao = GestLegal.VERSAO; return GestLegal.exigirAceitacao(); }); await j.p.waitForTimeout(200);
     assert.strictEqual(await j.p.locator('#legal-gate').count(), 0, 'consentimento existente respeitado'); assert.strictEqual(await j.p.evaluate(() => window.__upd.length), 0); await j.ctx.close();
-    const su = await abrir(b, url, 'super'); await su.p.evaluate(() => GestLegal.exigirAceitacao()); await su.p.waitForTimeout(150); assert.strictEqual(await su.p.locator('#legal-gate').count(), 0); await su.ctx.close();
+    const su = await abrir(b, url, 'super'); await su.p.evaluate(() => { GestLegal.exigirAceitacao(); }); await su.p.waitForTimeout(150); assert.strictEqual(await su.p.locator('#legal-gate').count(), 0); await su.ctx.close();
   } finally { await b.close(); s.close(); }
 });
 
@@ -92,7 +92,7 @@ test('legal: sem internet a aceitação fica no aparelho e sincroniza depois; er
     const e = await abrir(b, url, 'dono'); await e.p.evaluate(() => { window.__updErro = 'Permission denied'; GestLegal.exigirAceitacao(); }); await e.p.waitForSelector('#legal-gate'); await e.p.check('#lg-ck'); await e.p.click('#lg-ok');
     await e.p.waitForFunction(() => document.querySelector('#lg-er').textContent.length > 0); assert.ok(/Permission denied/.test(await e.p.locator('#lg-er').innerText())); assert.strictEqual(await e.p.locator('#legal-gate').count(), 1, 'continua bloqueado'); await e.ctx.close();
     // sair
-    const x = await abrir(b, url, 'dono'); await x.p.evaluate(() => GestLegal.exigirAceitacao()); await x.p.waitForSelector('#legal-gate'); await x.p.click('#lg-sair'); await x.p.waitForTimeout(300);
+    const x = await abrir(b, url, 'dono'); await x.p.evaluate(() => { GestLegal.exigirAceitacao(); }); await x.p.waitForSelector('#legal-gate'); await x.p.click('#lg-sair'); await x.p.waitForTimeout(300);
     assert.strictEqual(await x.p.evaluate(() => window.__out) >= 1, true, 'terminou a sessão'); assert.strictEqual(await x.p.evaluate(() => window.__upd.length), 0, 'sem aceitar nada'); await x.ctx.close();
   } finally { await b.close(); s.close(); }
 });
