@@ -170,7 +170,7 @@
     } finally { if (ouvinte && ouvinte.remove) { try { await ouvinte.remove(); } catch (e) { /* ok */ } } }
   }
   function detalhesAndroid(d) {
-    const w = raiz.modal('Atualização ' + esc(d.ultima), '<p>' + esc(d.texto) + '</p>' + notasHTML(d) + '<p class="muted small" id="upd-estado">' + esc(nativo() ? MSG_ANDROID : MSG_NAVEGADOR) + '</p><div id="upd-barra"></div><button type="button" class="btn block" id="upd-go">Atualizar ' + esc(d.ultima) + '</button><button type="button" class="link small" id="upd-nav" hidden>Transferir pelo navegador</button>', { sticky: true });
+    const w = raiz.modal('Atualização ' + esc(d.ultima), '<p>' + esc(d.texto) + '</p>' + notasHTML(d) + '<p class="muted small" id="upd-estado">' + esc(nativo() ? MSG_ANDROID : MSG_NAVEGADOR) + '</p><div id="upd-barra"></div><button type="button" class="btn block" id="upd-go">Atualizar ' + esc(d.ultima) + '</button><button type="button" class="link small" id="upd-nav">Transferir pelo navegador</button>', { sticky: true });
     const est = $('#upd-estado', w.m), barra = $('#upd-barra', w.m), go = $('#upd-go', w.m), nav = $('#upd-nav', w.m); let ocupado = false;
     nav.onclick = () => abrirTransferencia(d.url);
     // o Android pode recusar a instalação depois de a pessoa a iniciar: mostra o motivo (código curto) e oferece a alternativa
@@ -183,7 +183,7 @@
       try {
         const r = await transferirAndroid(d, n => { est.textContent = 'A transferir a atualização… ' + n + '%'; const pg = $('progress', barra); if (pg) pg.value = n; });
         if (r === 'permissao') { est.textContent = 'Para instalar, permita nesta janela do Android que o GestMZ instale atualizações. Depois volte aqui e toque em «Atualizar».'; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Atualizar ' + d.ultima; ocupado = false; return; }
-        est.textContent = 'Transferida. Confirme a instalação no ecrã do Android. Os seus dados mantêm-se.'; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Instalar de novo'; ocupado = false;
+        est.textContent = 'Transferida. Confirme a instalação no ecrã do Android. Os seus dados mantêm-se.'; barra.innerHTML = ''; nav.hidden = false; go.disabled = false; go.textContent = 'Instalar de novo'; ocupado = false;
       } catch (e) {
         const c = String(e && (e.message || e)); falhou(/sha256|pacote/.test(c) ? 'A atualização transferida não passou na verificação de segurança e foi descartada. Tente de novo mais tarde.' : navigator.onLine === false ? 'Sem internet. Ligue-se e tente de novo.' : 'Não foi possível transferir a atualização. Tente de novo.' + (/^[a-z0-9-]{2,20}$/.test(c) ? ' (código: ' + c + ')' : ''));
       }
