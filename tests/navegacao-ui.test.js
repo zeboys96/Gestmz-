@@ -107,7 +107,7 @@ test('puxar para atualizar: gesto real de toque atualiza só quando está no top
     // 1) puxar curto: não atualiza
     let fim = await toque(200, 150, 190); await p.waitForTimeout(80); await fim(); await p.waitForTimeout(400); assert.strictEqual(await p.evaluate(() => window.__n.vendas), base, 'puxar pouco não atualiza');
     // 2) puxar até ao fim: indicador e atualização
-    fim = await toque(200, 150, 420, 20); await p.waitForSelector('#ptr:not([hidden])'); assert.ok(/Solte/.test(await p.locator('#ptr').innerText()), 'indicador pede para soltar'); await fim();
+    fim = await toque(200, 150, 420, 20); await p.waitForSelector('#ptr:not([hidden])'); assert.strictEqual(await p.locator('#ptr').getAttribute('data-estado'), 'pronto'); assert.strictEqual((await p.locator('#ptr').innerText()).trim(), '', 'indicador sem texto'); await fim();
     await p.waitForFunction(b => window.__n.vendas > b, base); await p.waitForFunction(() => /Atualizado/.test(document.querySelector('.toast') ? document.querySelector('.toast').textContent : ''), null, { timeout: 4000 });
     assert.strictEqual(await p.locator('#d').inputValue(), '2026-10-01', 'o campo do ecrã mantém o que o utilizador escolheu');
     assert.strictEqual(await p.evaluate(() => window.__ch.filter(c => c.rpc === 'registar_venda' || c.rpc === 'anular_venda').length), 0, 'atualizar nunca envia nem altera vendas');

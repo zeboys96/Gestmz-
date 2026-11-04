@@ -19,6 +19,7 @@ const ICONS = {
   assinatura: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
   registo: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   ajuda: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/>',
+  suporte: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/><path d="M19 20c0 1.4-1.8 2-4.5 2H12"/>',
   conta: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   sair: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   lojas: '<path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9h18"/><path d="M9 20v-6h6v6"/>',
@@ -30,6 +31,9 @@ const ICONS = {
   caixa: '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V5h8v5M8 15h8"/>',
   foto: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/>'
 };
+/* carregador do GestMZ: três pontos a subir e descer, sem texto (o texto fica só para leitores de ecrã) */
+const LOADER = '<span class="gml" aria-hidden="true"><i></i><i></i><i></i></span>';
+const loaderHTML = (rotulo, extra) => '<div class="loading" role="status" aria-label="' + (rotulo || 'A carregar') + '"' + (extra ? ' style="' + extra + '"' : '') + '>' + LOADER + '</div>';
 const ico = (n, s = 20) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 const logo = (s = 36) => `<svg width="${s}" height="${s}" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="12" fill="#F4B400"/><rect x="10" y="26" width="7" height="12" rx="2" fill="#00453A"/><rect x="20.5" y="18" width="7" height="20" rx="2" fill="#00453A"/><rect x="31" y="9" width="7" height="29" rx="2" fill="#00453A"/></svg>`;
 
@@ -358,10 +362,10 @@ const NAV_LOJA = [
   ['painel', 'painel', 'Painel', 'dono,gerente'], ['pdv', 'vender', 'Vender', 'dono,gerente,caixa'], ['vendas', 'vendas', 'Vendas', 'dono,gerente,caixa'], ['fecho', 'caixa', 'Fechar caixa', 'gerente,caixa'], ['fechos', 'caixa', 'Fechos de caixa', 'dono'],
   ['produtos', 'produtos', 'Produtos', 'dono,gerente,caixa'], ['clientes', 'clientes', 'Clientes', 'dono,gerente,caixa'], ['despesas', 'despesas', 'Despesas', 'dono'],
   ['relatorios', 'relatorios', 'Relatórios', 'dono,gerente'], ['equipa', 'equipa', 'Equipa', 'dono,gerente'], ['assinatura', 'assinatura', 'Assinatura', 'dono'],
-  ['registo', 'registo', 'Registo', 'dono,gerente'], ['suporte', 'ajuda', 'Suporte', 'dono'], ['ajuda', 'ajuda', 'Ajuda', 'dono,gerente,caixa'], ['perfil', 'conta', 'Conta', 'dono,gerente,caixa'], ['sair', 'sair', 'Sair', 'dono,gerente,caixa']
+  ['registo', 'registo', 'Registo', 'dono,gerente'], ['suporte', 'suporte', 'Suporte', 'dono'], ['ajuda', 'ajuda', 'Ajuda', 'dono,gerente,caixa'], ['perfil', 'conta', 'Conta', 'dono,gerente,caixa'], ['sair', 'sair', 'Sair', 'dono,gerente,caixa']
 ];
 const navLoja = () => NAV_LOJA.filter(n => n[3].split(',').includes(S.perfil.papel));
-const navSuper = () => [['s_lojas', 'lojas', 'Lojas'], ['s_pagamentos', 'assinatura', 'Pagamentos'], ['s_suporte', 'ajuda', 'Suporte'], ['s_config', 'conta', 'Preços e conta'], ['perfil', 'registo', 'Senha'], ['sair', 'sair', 'Sair']];
+const navSuper = () => [['s_lojas', 'lojas', 'Lojas'], ['s_pagamentos', 'assinatura', 'Pagamentos'], ['s_suporte', 'suporte', 'Suporte'], ['s_config', 'conta', 'Preços e conta'], ['perfil', 'registo', 'Senha'], ['sair', 'sair', 'Sair']];
 function shell(items) {
   const sub = S.loja ? S.loja.nome : 'Dono do sistema';
   $('#app').innerHTML = `<div class="shell"><aside class="side"><div class="brandrow">${logo(34)}<div><b>GestMZ</b><small>${esc(sub)}</small></div></div><nav id="nav" aria-label="Menu principal"></nav><div class="me">${avatar(S.perfil)}<div><b>${esc(S.perfil.nome)}</b><span>${PAPEL[S.perfil.papel]}</span></div></div></aside><div style="flex:1;min-width:0"><div id="banner"></div><div id="topline"></div><main id="main"></main></div></div>`;
@@ -380,7 +384,7 @@ async function go(v, silencioso, opc) {
   if (!VIEWS[v]) return;
   const tok = ++navTok; cur = v; $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   const ativo = $('#nav button.on'); if (ativo && ativo.scrollIntoView) { try { ativo.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ok */ } }
-  if (!silencioso) { mainLimpo().innerHTML = '<div class="loading">A carregar…</div>'; }
+  if (!silencioso) { mainLimpo().innerHTML = loaderHTML(); }
   let falhou = null;
   try { await VIEWS[v](); } catch (e) { falhou = e; }
   if (tok !== navTok) {            // entretanto o utilizador escolheu outro ecrã: este resultado já não interessa
