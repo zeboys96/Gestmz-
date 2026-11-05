@@ -3,7 +3,7 @@
    Só começa quando o ecrã está no topo e o dedo desce na vertical; a rolagem normal e os campos de texto não são afetados.
    Atualizar = redesenhar o ecrã atual com os dados do servidor (nunca reenvia vendas nem apaga nada); valores já escritos nos campos do ecrã são repostos. */
 (function (raiz) {
-  const ECRAS = ['painel', 'vendas', 'produtos', 'clientes', 'despesas', 'relatorios', 'equipa', 'registo', 'assinatura', 'suporte', 'fechos', 's_lojas', 's_pagamentos', 's_suporte'];
+  const ECRAS = ['painel', 'vendas', 'produtos', 'clientes', 'despesas', 'relatorios', 'equipa', 'registo', 'assinatura', 'suporte', 'fechos', 's_lojas', 's_atividade', 's_pagamentos', 's_suporte'];
   const LIMITE = 64, MAX = 110;
   let el = null, pendenteOnline = false;
   const topo = () => (document.scrollingElement ? document.scrollingElement.scrollTop : window.scrollY) <= 0;

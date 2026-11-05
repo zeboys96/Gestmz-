@@ -1,6 +1,6 @@
 'use strict';
 /* GestMZ — painel do dono do sistema (você): lojas, comprovativos e preços */
-S.lojas = []; S.pf = []; S.pags = []; S.tks = [];
+S.lojas = []; S.pf = []; S.pags = []; S.tks = []; S.atv = {}; S.vers = [];
 async function carregarSuper() {
   const [pl, lj, pf, pg, tk] = await Promise.all([
     q(sb.from('plataforma').select('*')),
@@ -10,6 +10,14 @@ async function carregarSuper() {
     all(() => sb.from('suporte_tickets').select('*').order('atualizado_em', { ascending: false }))
   ]);
   S.plat = pl[0]; S.lojas = lj; S.pf = pf; S.pags = pg; S.tks = tk;
+  await carregarAtividade();
+}
+/* atividade das lojas (migração 17). Se o servidor ainda não a tiver, fica vazia e o resto do painel funciona na mesma. */
+async function carregarAtividade() {
+  try {
+    const [a, v] = await Promise.all([q(sb.rpc('super_atividade')), q(sb.rpc('super_versoes_em_uso'))]);
+    S.atv = {}; (a || []).forEach(x => { S.atv[x.loja_id] = x; }); S.vers = v || []; S.atvOk = true;
+  } catch (e) { S.atv = {}; S.vers = []; S.atvOk = false; }
 }
 const pendentes = () => S.pags.filter(p => p.estado === 'pendente');
 const tkNovos = () => S.tks.filter(t => t.nao_lido_super && t.estado !== 'fechado');
@@ -33,7 +41,7 @@ function iniciarSuperRT() {
     canais.push(ch);
   } catch (e) { /* sem tempo real */ }
   poll = setInterval(async () => {
-    try { const antes = pendentes().length; await carregarSuper(); const n = pendentes().length; badge('s_pagamentos', n); badge('s_suporte', tkNovos().length); if (n > antes) { bip(); toast('Novo comprovativo de pagamento recebido.'); if (cur === 's_pagamentos' || cur === 's_lojas') go(cur, true); } } catch (e) { /* ok */ }
+    try { const antes = pendentes().length; await carregarSuper(); const n = pendentes().length; badge('s_pagamentos', n); badge('s_suporte', tkNovos().length); if (cur === 's_atividade') go(cur, true); if (n > antes) { bip(); toast('Novo comprovativo de pagamento recebido.'); if (cur === 's_pagamentos' || cur === 's_lojas') go(cur, true); } } catch (e) { /* ok */ }
   }, 60000);
 }
 
@@ -53,7 +61,7 @@ VIEWS.s_lojas = async function () {
   </div>
   <div class="card">${S.lojas.length ? `<div class="tw"><table><tr><th>Loja</th><th>Localização</th><th>Contacto</th><th>Estado</th><th>Válida até</th><th></th></tr>${S.lojas.map(l => {
     const e = estadoLoja(l), d = diasPara(l.valido_ate), dn = donoDe(l.id);
-    return `<tr><td><b>${esc(l.nome)}</b><br><span class="muted small">${l.configurada === false ? 'Por configurar' : esc(l.tipo)}</span></td><td>${esc(l.endereco || '—')}</td><td>${esc(l.tel || '—')}<br><span class="muted small">${esc(dn ? dn.email : '')}</span></td><td><span class="tag ${e}">${TXT_ESTADO[e]}</span></td><td>${fd(l.valido_ate)}<br><span class="muted small">${d >= 0 ? d + ' dia(s)' : 'há ' + (-d) + ' dia(s)'}</span></td>
+    return `<tr><td><b>${esc(l.nome)}</b><br><span class="muted small">${l.configurada === false ? 'Por configurar' : esc(l.tipo)}</span>${S.atvOk ? '<br><span class="est small">' + marcaEstado(S.atv[l.id]) + '</span>' : ''}</td><td>${esc(l.endereco || '—')}</td><td>${esc(l.tel || '—')}<br><span class="muted small">${esc(dn ? dn.email : '')}</span></td><td><span class="tag ${e}">${TXT_ESTADO[e]}</span></td><td>${fd(l.valido_ate)}<br><span class="muted small">${d >= 0 ? d + ' dia(s)' : 'há ' + (-d) + ' dia(s)'}</span></td>
     <td class="act"><button class="btn ghost sm" data-a="ver" data-id="${l.id}">Ver</button><button class="btn ghost sm" data-a="dias" data-id="${l.id}">+30 dias</button><button class="btn ghost sm" data-a="susp" data-id="${l.id}">${l.estado === 'suspensa' ? 'Reativar' : 'Suspender'}</button></td></tr>`;
   }).join('')}</table></div>` : '<div class="empty">Ainda não há lojas registadas. Quando alguém criar uma loja, ela aparece aqui.</div>'}</div>`;
   $('#novol').onclick = formLojista;
@@ -178,5 +186,69 @@ VIEWS.s_config = async function () {
       await q(sb.from('plataforma').update({ titular: d.titular.trim(), numero: d.numero.trim(), metodo: d.metodo, preco_mensal: num(d.preco_mensal), preco_trimestral: num(d.preco_trimestral), preco_anual: num(d.preco_anual), teste_dias: parseInt(d.teste_dias) || 0 }).eq('id', 1));
       toast('Guardado.'); await carregarSuper();
     } catch (err) { erro(err); }
+  };
+};
+
+/* ======================= ATIVIDADE ======================= */
+const ONLINE_MS = 3 * 60 * 1000;
+function haTempo(ts) {
+  if (!ts) return 'nunca';
+  const m = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
+  if (m < 2) return 'há instantes'; if (m < 60) return 'há ' + m + ' min';
+  const h = Math.round(m / 60); if (h < 24) return 'há ' + h + (h === 1 ? ' hora' : ' horas');
+  const d = Math.round(h / 24); return 'há ' + d + (d === 1 ? ' dia' : ' dias');
+}
+const estaOnline = a => !!a && a.ultimo_visto && Date.now() - new Date(a.ultimo_visto).getTime() < ONLINE_MS;
+function marcaEstado(a) {
+  if (estaOnline(a)) return '<span class="pt on" aria-hidden="true"></span><b>Online</b>';
+  if (a && a.ultimo_visto) return '<span class="pt" aria-hidden="true"></span><span>' + esc(haTempo(a.ultimo_visto)) + '</span>';
+  return '<span class="pt nunca" aria-hidden="true"></span><span class="muted">Nunca abriu</span>';
+}
+function tira14(a) {
+  const on = new Set((a && a.dias || []).map(String)), hoje = new Date(); let h = '';
+  for (let i = 13; i >= 0; i--) { const d = new Date(hoje); d.setDate(d.getDate() - i); const k = ymd(d); h += '<i class="' + (on.has(k) ? 'on' : '') + '" title="' + esc(fd(k)) + '"></i>'; }
+  return '<span class="dias14" role="img" aria-label="Dias de uso nos últimos 14 dias">' + h + '</span>';
+}
+const FILTROS_ATV = [['todas', 'Todas'], ['online', 'Online agora'], ['inativas', 'Sem uso há 7 dias'], ['nunca', 'Nunca abriram']];
+VIEWS.s_atividade = async function () {
+  await carregarSuper();
+  const hoje = ymd(), ls = S.lojas.filter(l => l.configurada !== false || S.atv[l.id]);
+  const info = l => S.atv[l.id] || null;
+  const online = ls.filter(l => estaOnline(info(l))).length;
+  const hojeN = ls.filter(l => info(l) && (info(l).dias || []).map(String).includes(hoje)).length;
+  const inativas = ls.filter(l => { const a = info(l), e = estadoLoja(l); return (e === 'ativa' || e === 'teste') && a && a.ultimo_visto && a.dias_7 === 0; });
+  const nunca = ls.filter(l => !info(l) || !info(l).ultimo_visto);
+  const expirar = S.lojas.filter(l => { const d = diasPara(l.valido_ate), e = estadoLoja(l); return (e === 'ativa' || e === 'teste') && d >= 0 && d <= 7; });
+  let filtro = (S._fa || 'todas');
+  const lista = () => ls.filter(l => filtro === 'online' ? estaOnline(info(l)) : filtro === 'inativas' ? inativas.includes(l) : filtro === 'nunca' ? nunca.includes(l) : true)
+    .sort((a, b) => ((info(b) && info(b).ultimo_visto) || '').localeCompare((info(a) && info(a).ultimo_visto) || ''));
+  const linhas = () => lista().map(l => { const a = info(l), e = estadoLoja(l);
+    return `<tr><td data-l="Loja"><b>${esc(l.nome)}</b><br><span class="tag ${e}">${TXT_ESTADO[e] || e}</span></td>
+      <td data-l="Agora"><span class="est">${marcaEstado(a)}</span></td>
+      <td data-l="Últimos 14 dias">${tira14(a)}</td>
+      <td data-l="Dias de uso" class="n">${a ? a.dias_7 : 0} em 7 · ${a ? a.dias_30 : 0} em 30</td>
+      <td data-l="App">${a && a.versao ? esc(a.versao) : '—'}${a && a.plataforma ? ' · ' + esc({ android: 'Android', windows: 'Windows', web: 'Navegador' }[a.plataforma] || a.plataforma) : ''}</td></tr>`; }).join('');
+  const aviso = !S.atvOk ? '<div class="card"><div class="msg warn">A atividade ainda não está ativa no servidor. Assim que for ativada, as lojas aparecem aqui.</div></div>' : '';
+  const atencao = [];
+  if (expirar.length) atencao.push(`<b>${expirar.length}</b> ${expirar.length === 1 ? 'loja termina' : 'lojas terminam'} a subscrição nos próximos 7 dias: ${expirar.map(l => esc(l.nome) + ' (' + diasPara(l.valido_ate) + ' d)').join(', ')}.`);
+  if (inativas.length) atencao.push(`<b>${inativas.length}</b> ${inativas.length === 1 ? 'loja ativa não usa' : 'lojas ativas não usam'} a app há 7 dias ou mais: ${inativas.map(l => esc(l.nome)).join(', ')}. Vale a pena contactar.`);
+  if (nunca.length) atencao.push(`<b>${nunca.length}</b> ${nunca.length === 1 ? 'loja nunca abriu' : 'lojas nunca abriram'} a app: ${nunca.map(l => esc(l.nome)).join(', ')}.`);
+  $('#main').innerHTML = `<div class="bar"><h2>Atividade</h2><span class="muted">Atualiza sozinha a cada minuto</span></div>${aviso}
+  <div class="grid">
+    <div class="stat ok"><span>Lojas online agora</span><b>${online}</b></div>
+    <div class="stat hi"><span>Usaram hoje</span><b>${hojeN}</b></div>
+    <div class="stat ${inativas.length ? 'warn' : ''}"><span>Sem uso há 7 dias</span><b>${inativas.length}</b></div>
+    <div class="stat ${nunca.length ? 'warn' : ''}"><span>Nunca abriram</span><b>${nunca.length}</b></div>
+  </div>
+  ${atencao.length ? `<div class="card"><h3 style="margin-top:0">Atenção</h3><ul class="atencao">${atencao.map(t => '<li>' + t + '</li>').join('')}</ul></div>` : ''}
+  <div class="card"><div class="chips" id="fa">${FILTROS_ATV.map(([k, t]) => `<button type="button" class="chip ${k === filtro ? 'on' : ''}" data-f="${k}">${t}</button>`).join('')}</div>
+    <div class="tw"><table><tr><th>Loja</th><th>Agora</th><th>Últimos 14 dias</th><th>Dias de uso</th><th>App</th></tr><tbody id="atvl">${linhas()}</tbody></table></div>
+    <p class="muted small" id="atve" ${lista().length ? 'hidden' : ''}>Nenhuma loja neste filtro.</p>
+    <p class="muted small">«Online» quer dizer que a app esteve aberta nos últimos 3 minutos. Só se regista quando a app abre e a versão; nunca vendas, produtos, clientes nem valores.</p></div>
+  <div class="card"><h3 style="margin-top:0">Versões da app em uso</h3>${S.vers.length ? `<div class="tw"><table><tr><th>Versão</th><th>Utilizadores</th><th>Lojas</th><th>Último acesso</th></tr>${S.vers.map(v => `<tr><td data-l="Versão"><b>${esc(v.versao)}</b></td><td data-l="Utilizadores" class="n">${v.utilizadores}</td><td data-l="Lojas" class="n">${v.lojas}</td><td data-l="Último acesso">${esc(haTempo(v.ultimo_visto))}</td></tr>`).join('')}</table></div>
+    <p class="muted small">Use isto para saber se todos já têm a versão nova antes de ativar mudanças que a exigem. Conta os últimos 30 dias.</p>` : '<p class="muted">Ainda sem dados.</p>'}</div>`;
+  $('#main').onclick = e => {
+    const b = e.target.closest('button[data-f]'); if (!b) return; filtro = S._fa = b.dataset.f;
+    $$('#fa .chip').forEach(c => c.classList.toggle('on', c.dataset.f === filtro)); $('#atvl').innerHTML = linhas(); $('#atve').hidden = !!lista().length;
   };
 };

@@ -230,26 +230,21 @@ VIEWS.suporte = async function () {
 };
 
 /* ======================= AJUDA ======================= */
-/* Cada item diz a que cargos se aplica (d = dono, g = gerente, c = caixa). Só descreve o que a aplicação faz hoje. */
+/* Dicas do primeiro acesso (e do botão «Ver dicas» em Ajuda). Curtas e sem termos técnicos: uma ideia por dica.
+   Cada item: [ícone, cargos (d = dono, g = gerente, c = caixa), título, texto]. A explicação completa está nas perguntas frequentes da página Ajuda. */
 const SLIDES = [
-  ['painel', 'd,g,c', 'Bem-vindo ao GestMZ', 'O GestMZ regista vendas, stock e validades, clientes, caixa e relatórios da loja. O menu mostra só o que o seu cargo pode usar. Todos os aparelhos da loja veem os mesmos dados.'],
-  ['vender', 'd,g,c', 'Vender', 'Em «Vender», leia o código de barras (leitor ou câmara) ou pesquise pelo nome, escolha como o cliente paga e finalize; o recibo pode ser mostrado ou impresso. Pode retirar artigos ou diminuir quantidades enquanto a venda não está finalizada. Para vender a fiado, escolha o cliente.'],
-  ['vendas', 'd,g,c', 'Vendas e anulações', 'Em «Vendas» vê as vendas do dia (o caixa vê só as suas). Anular uma venda já finalizada pede a autorização do gerente ou do dono, e fica registada. O stock volta ao lote de origem.'],
-  ['caixa', 'g,c', 'Fechar o caixa', 'No fim do turno, abra «Fechar caixa»: vê o resumo calculado pelo sistema, conta o dinheiro, escreve o valor contado e confirma. O sistema mostra a diferença (falta ou excesso). Depois de confirmado não se altera; só o dono pode reabrir o último fecho.'],
-  ['caixa', 'd', 'Fechos de caixa', 'Em «Fechos de caixa» vê o histórico de fechos de cada funcionário, com a diferença registada. Só o dono pode reabrir o último fecho de um funcionário, indicando o motivo; o original fica guardado.'],
-  ['produtos', 'd,g', 'Produtos e categorias', 'Registe cada produto uma só vez: nome, categoria (escolha da lista ou crie uma nova), preços e, se vender em caixa e unidade, quantas unidades tem a caixa e o código de cada uma. O stock conta-se sempre em unidades. Só o dono define o limite de stock baixo e a fotografia do produto.'],
-  ['produtos', 'c', 'Produtos', 'Em «Produtos» vê os produtos com stock disponível e o preço. Produtos sem stock não aparecem na lista de venda. Não vê custos nem quantidades.'],
-  ['registo', 'd,g', 'Stock e validades', 'Cada entrada de stock tem lote e validade. O sistema vende primeiro o que expira primeiro e não vende lotes expirados. O painel avisa o que está a acabar e o que está perto de expirar. Use «Entrada de stock» para repor.'],
-  ['clientes', 'd,g,c', 'Clientes e fiado', 'Registe o cliente (nome e telefone) e venda a fiado. A dívida fica guardada; quando o cliente pagar, use «Receber» na sua ficha.'],
-  ['despesas', 'd', 'Despesas e relatórios', 'Em «Despesas» regista os gastos da loja. Em «Relatórios» escolhe um período e vê vendas, custos e lucro. Só o dono vê despesas e lucros.'],
-  ['relatorios', 'g', 'Relatórios', 'Em «Relatórios» escolhe um período e vê as vendas. Custos, despesas e lucros são só do dono.'],
-  ['equipa', 'd', 'Equipa', 'Em «Equipa» cria gerentes e caixas (e-mail, senha, foto e código de acesso) e retira o acesso a quem sair. Ao entrar, o funcionário usa o seu código de acesso.'],
-  ['equipa', 'g', 'Equipa', 'Em «Equipa» vê a equipa e pode gerir os caixas (criar e retirar o acesso). Os outros gerentes e o dono só o dono altera.'],
-  ['assinatura', 'd', 'Subscrição', 'Em «Assinatura» escolhe o plano, paga por transferência móvel para o número indicado, envia a foto do comprovativo e aguarda a confirmação; a validade atualiza-se quando for confirmada. Sem subscrição válida só pode consultar os dados.'],
-  ['painel', 'd,g', 'Avisos (sino)', 'O sino mostra avisos: vendas, stock baixo ou a zero, vendas anuladas. O dono recebe também o aviso de caixa fechado ou reaberto. Toque para marcar como lido.'],
-  ['sair', 'd,g,c', 'Sem internet', 'Pode vender sem internet: a venda fica guardada neste aparelho e segue sozinha quando a ligação voltar. Não desinstale a aplicação com vendas por enviar. Em «Conta» pode guardar uma cópia das vendas pendentes.'],
-  ['conta', 'd,g,c', 'A sua conta', 'Em «Conta» muda a senha e vê os Termos e a Política de privacidade. O dono pode ativar o Google Autenticador para proteger a entrada, e guarda os códigos de recuperação num sítio seguro.'],
-  ['check', 'd,g,c', 'Dúvidas?', 'Volte a esta página sempre que precisar. O dono pode escrever ao Suporte; os funcionários falam com o dono da loja.']
+  ['painel', 'd,g', 'Bem-vindo ao GestMZ', 'Venda, controle o stock e veja como está a sua loja, tudo num só lugar.'],
+  ['painel', 'c', 'Bem-vindo ao GestMZ', 'Aqui faz as vendas do dia e fecha o seu caixa no fim do turno.'],
+  ['vender', 'd,g,c', 'Vender', 'Toque em Vender, escolha os produtos e finalize. O recibo sai logo.'],
+  ['produtos', 'd,g', 'Produtos', 'Registe cada produto uma só vez, com o preço e a quantidade. O resto é automático.'],
+  ['registo', 'd,g', 'Validades', 'O GestMZ avisa quando um produto está a acabar ou perto de expirar.'],
+  ['clientes', 'd,g,c', 'Fiado', 'Escolha o cliente para vender a fiado. Quando ele pagar, toque em Receber.'],
+  ['caixa', 'g,c', 'Fechar o caixa', 'No fim do turno, conte o dinheiro e feche o caixa. O sistema mostra se sobra ou falta.'],
+  ['caixa', 'd', 'Fechos de caixa', 'Veja aqui o fecho de cada funcionário e se houve diferenças.'],
+  ['equipa', 'd', 'A sua equipa', 'Crie acessos para gerentes e caixas. Cada pessoa vê só o que precisa.'],
+  ['sair', 'd,g,c', 'Sem internet', 'Pode vender sem internet. As vendas seguem sozinhas quando a ligação voltar.'],
+  ['ajuda', 'g,c', 'Precisa de ajuda?', 'Abra Ajuda para ver as respostas mais comuns. O dono da loja também pode ajudar.'],
+  ['suporte', 'd', 'Precisa de ajuda?', 'Abra Ajuda para ver as respostas mais comuns ou fale connosco em Suporte.']
 ];
 const slidesDoPerfil = () => SLIDES.filter(s => s[1].split(',').includes({ dono: 'd', gerente: 'g', caixa: 'c' }[S.perfil.papel] || 'x')).map(s => [s[0], s[2], s[3]]);
 VIEWS.ajudaSlides = function () {
