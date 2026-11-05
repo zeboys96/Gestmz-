@@ -5,7 +5,7 @@
    só quando a VERSAO mudar por uma alteração relevante. Se a internet falhar, a aceitação fica no aparelho e sincroniza depois.
    Texto de boa-fé, em linguagem simples; convém revisão por um advogado em Moçambique antes de uso comercial alargado. */
 (function (raiz) {
-  const VERSAO = '2026-11-01';   // só mudar quando a alteração for relevante (obriga a nova aceitação)
+  const VERSAO = '2026-11-04';   // só mudar quando a alteração for relevante (obriga a nova aceitação)
   const CONTACTO = '';           // opcional: e-mail ou telefone público do responsável (vazio = usa-se o separador «Suporte»)
   const quando = 'Versão ' + VERSAO;
   const contacto = () => CONTACTO
@@ -49,6 +49,7 @@
 <ul><li><b>Conta:</b> nome, e-mail, cargo, fotografia de perfil (opcional) e data do último acesso, para o identificar e aplicar as suas permissões. A senha nunca é guardada em texto legível; o código de acesso dos funcionários é guardado só de forma cifrada.</li>
 <li><b>Loja:</b> nome, tipo de negócio, NUIT, telefone, endereço, estado da subscrição e comprovativos de pagamento, para gerir o serviço.</li>
 <li><b>Atividade da loja:</b> produtos, preços, stock e validades, fotografias de produtos, vendas e quem as fez, clientes (nome, telefone e dívida), recebimentos, despesas, fechos de caixa, notificações e um registo de ações importantes, para o funcionamento diário e os relatórios.</li>
+<li><b>Uso da aplicação:</b> quando a aplicação está aberta, a versão e o tipo de aparelho (telemóvel, computador ou navegador), sem o que vende nem valores. Serve para saber se a loja está a usar o serviço e para prestar suporte. Os registos diários são apagados passados 90 dias.</li>
 <li><b>Suporte:</b> as mensagens que enviar.</li>
 <li><b>No seu aparelho:</b> uma cópia para trabalhar sem internet, as vendas por enviar, a sessão e preferências.</li></ul>
 <h4>2. Câmara</h4>
@@ -57,7 +58,7 @@
 <p>Os dados são tratados por fornecedores que nos prestam serviços: <b>alojamento e base de dados na nuvem</b> (servidores na Europa, fora de Moçambique), <b>serviços de distribuição da aplicação e das atualizações</b> e um <b>serviço externo de tipos de letra</b>. Estes fornecedores tratam os dados só para nos prestar o serviço. Não vendemos nem cedemos dados a terceiros para outros fins, salvo se a lei o exigir.</p>
 <p><b>Endereço de internet (IP):</b> sempre que a aplicação se liga à internet, o fornecedor que a serve e o serviço de tipos de letra podem ver o endereço IP do aparelho e a data do pedido. Os fornecedores de distribuição da aplicação e de tipos de letra não recebem as vendas nem os dados das lojas.</p>
 <h4>4. Quem vê o quê</h4>
-<p>O dono vê tudo da sua loja. O gerente e o caixa veem só o que o seu cargo permite (o caixa não vê custos, lucros nem despesas). A administração do GestMZ vê dados básicos e de contacto das lojas, a subscrição, comprovativos e pedidos de suporte; no uso normal não consulta as vendas nem o stock.</p>
+<p>O dono vê tudo da sua loja. O gerente e o caixa veem só o que o seu cargo permite (o caixa não vê custos, lucros nem despesas). A administração do GestMZ vê dados básicos e de contacto das lojas, a subscrição, comprovativos, pedidos de suporte e se a loja usou a aplicação (quando e com que versão); no uso normal não consulta as vendas nem o stock.</p>
 <h4>5. Como protegemos</h4>
 <p>Cada loja está isolada das outras; as permissões são verificadas no servidor e não só no ecrã; as ligações são cifradas e as ações sensíveis ficam registadas. Nenhum sistema é infalível: guarde bem a sua senha.</p>
 <h4>6. Quanto tempo guardamos</h4>

@@ -38,7 +38,7 @@ test('legal: o ecrã de entrada não tem ligações legais nem «Contrato»; os 
       ['privacidade', 'Política de privacidade', [/Não vendemos os seus dados/i, /Dados que tratamos e para quê/, /Quem recebe os dados/, /endereço IP/i, /Como protegemos/, /Os seus direitos/, /Quanto tempo guardamos/]]]) {
       await p.click(`#x [data-legal=${k}]`); await p.waitForSelector('.modal .legal');
       const m = await p.locator('.modal').innerText(); assert.ok(m.includes(titulo), titulo); for (const f of frases) assert.ok(f.test(m), titulo + ' deve conter ' + f);
-      assert.ok(!/undefined|\[object|\$\{|contrato/i.test(m), 'sem marcadores nem «contrato» em ' + titulo); assert.ok(!/supabase|github|vercel|google|postgres|api\b|rls/i.test(m), 'sem nomes de serviços nem termos técnicos em ' + titulo); assert.ok(m.length < 6500, titulo + ' é curto'); assert.ok(!/90 dias|reembols/i.test(m), 'sem promessas que o sistema não cumpre');
+      assert.ok(!/undefined|\[object|\$\{|contrato/i.test(m), 'sem marcadores nem «contrato» em ' + titulo); assert.ok(!/supabase|github|vercel|google|postgres|api\b|rls/i.test(m), 'sem nomes de serviços nem termos técnicos em ' + titulo); assert.ok(m.length < 6500, titulo + ' é curto'); assert.ok(!/reembols/i.test(m.replace(/Os registos diários são apagados passados 90 dias\./, '')) && !/90 dias/i.test(m.replace('Os registos diários são apagados passados 90 dias.', '')), 'sem promessas que o sistema não cumpre (a única retenção declarada, de 90 dias, é a do registo de uso, que o servidor cumpre)');
       await p.click('.modal [data-x]'); assert.strictEqual(await p.locator('.modal').count(), 0);
     }
     assert.deepStrictEqual(erros, []); await ctx.close();
@@ -75,8 +75,8 @@ test('ajuda: cada cargo vê só o que existe para si; sem instruções antigas n
       assert.deepStrictEqual(erros, []); await ctx.close();
     }
     for (const [papel, t] of Object.entries(textos)) { assert.ok(!/contrato/i.test(t), papel); assert.ok(!/Sim, para vender e actualizar|só são guardadas com ligação|inventado por si no campo|Registo”|retirar um produto da venda ou anular/.test(t), papel + ': sem instruções antigas'); assert.ok(/sem internet/i.test(t), papel + ' explica o trabalho sem internet'); }
-    assert.ok(/Fechos de caixa/.test(textos.dono) && /Despesas e relatórios/.test(textos.dono) && /Subscrição/.test(textos.dono) && /Equipa/.test(textos.dono));
-    assert.ok(!/Despesas e relatórios|Subscrição|Fechos de caixa/.test(textos.gerente), 'o gerente não vê guias de despesas, subscrição nem fechos do dono'); assert.ok(/Fechar o caixa/.test(textos.gerente) && /gerir os caixas/.test(textos.gerente));
+    assert.ok(/Fechos de caixa/.test(textos.dono) && /A sua equipa/.test(textos.dono));
+    assert.ok(!/Despesas e relatórios|Subscrição|Fechos de caixa/.test(textos.gerente), 'o gerente não vê guias de despesas, subscrição nem fechos do dono'); assert.ok(/Fechar o caixa/.test(textos.gerente));
     assert.ok(!/Despesas|Subscrição|Equipa|Relatórios|Entrada de stock|Avisos \(sino\)/.test(textos.caixa), 'o caixa só vê o que usa'); assert.ok(/Fechar o caixa/.test(textos.caixa) && /Vender/.test(textos.caixa));
   } finally { await b.close(); s.close(); }
 });

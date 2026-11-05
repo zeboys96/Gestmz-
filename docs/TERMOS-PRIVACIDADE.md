@@ -13,3 +13,7 @@ Implementação: `www/legal.js`. Testes: `tests/legal.test.js` (inclui a Ajuda p
 ## Atualização 03/11/2026 (versão 1.1.1)
 - Política de privacidade reescrita sem nomes de marcas nem termos técnicos: resumo inicial, dados e finalidade, câmara, destinatários (categorias de fornecedores, incluindo o endereço IP), quem vê o quê, proteção, conservação e direitos. `VERSAO` mantém-se em `2026-11-01` (clarificação, não alteração relevante): ninguém é obrigado a aceitar de novo.
 - Corrigido: tocar no X dos Termos/Privacidade (em «Conta») abria «Novo funcionário». Causa: o ecrã «Equipa» deixava um `onclick` no `<main>` que apanhava qualquer botão `.link`; cada ecrã novo passa a ter um `<main>` limpo e o manipulador só aceita botões com `data-id`.
+
+## Atualização 2026-11-04 (atividade das lojas)
+- A política passou a dizer que se regista **quando a app está aberta, a versão e a plataforma** (sem vendas nem valores) e que a administração vê se a loja usou a app. Registos diários apagados aos 90 dias.
+- `VERSAO` dos textos = `2026-11-04`: todos os utilizadores de loja voltam a aceitar uma vez (alteração relevante à privacidade).

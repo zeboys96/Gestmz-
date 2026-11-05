@@ -4,7 +4,7 @@ const { spawnSync } = require('node:child_process'); const path = require('node:
 const H = process.env.PGHOST || '/tmp/pg', P = process.env.PGPORT || '5544', U = process.env.PGUSER || 'postgres';
 const tem = spawnSync('psql', ['-X', '-At', '-h', H, '-p', P, '-U', U, '-d', 'postgres', '-c', 'select 1']).status === 0;
 test('base de dados: inicialização segura, isolamento, PIN, permissões por papel, reversões', { skip: !tem && 'sem Postgres local (PGHOST/PGPORT/PGUSER)' }, () => {
-  const corridas = [['correr.sh', {}], ['correr.sh', { GESTMZ_COM12: '1' }], ['atualizacao.sh', {}], ['reversao.sh', {}], ['permissoes.sh', {}], ['reversao12.sh', {}]];
+  const corridas = [['correr.sh', {}], ['correr.sh', { GESTMZ_COM12: '1' }], ['atualizacao.sh', {}], ['reversao.sh', {}], ['permissoes.sh', {}], ['reversao12.sh', {}], ['atividade.sh', { GESTMZ_SEM12: '1', GESTMZ_DUAS: '1' }], ['atividade.sh', { GESTMZ_DUAS: '1' }]];
   for (const [sh, env] of corridas) {
     const r = spawnSync('bash', [path.join(__dirname, 'db', sh)], { encoding: 'utf8', env: { ...process.env, ...env } });
     const falhas = r.stdout.split('\n').filter(l => l.startsWith('FALHA'));

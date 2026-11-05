@@ -19,6 +19,7 @@ const ICONS = {
   assinatura: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
   registo: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   ajuda: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/>',
+  pulso: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
   suporte: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/><path d="M19 20c0 1.4-1.8 2-4.5 2H12"/>',
   conta: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   sair: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
@@ -319,6 +320,7 @@ async function vSetupSuper() {
 async function sair() {
   pararRT(); cart = []; limparCache();
   if (window.GestMZAtualizacao) GestMZAtualizacao.fechar();
+  if (window.GestAtividade) GestAtividade.parar();
   document.querySelectorAll('.modal').forEach(m => m.remove());   // nada da sessão anterior (guia, termos, avisos) fica por cima do login
   try { await sb.auth.signOut(); } catch (e) { /* ok */ }
   S = { perfil: null, loja: null, plat: null, cats: [], produtos: [], clientes: [], equipa: [] };
@@ -365,7 +367,7 @@ const NAV_LOJA = [
   ['registo', 'registo', 'Registo', 'dono,gerente'], ['suporte', 'suporte', 'Suporte', 'dono'], ['ajuda', 'ajuda', 'Ajuda', 'dono,gerente,caixa'], ['perfil', 'conta', 'Conta', 'dono,gerente,caixa'], ['sair', 'sair', 'Sair', 'dono,gerente,caixa']
 ];
 const navLoja = () => NAV_LOJA.filter(n => n[3].split(',').includes(S.perfil.papel));
-const navSuper = () => [['s_lojas', 'lojas', 'Lojas'], ['s_pagamentos', 'assinatura', 'Pagamentos'], ['s_suporte', 'suporte', 'Suporte'], ['s_config', 'conta', 'Preços e conta'], ['perfil', 'registo', 'Senha'], ['sair', 'sair', 'Sair']];
+const navSuper = () => [['s_lojas', 'lojas', 'Lojas'], ['s_atividade', 'pulso', 'Atividade'], ['s_pagamentos', 'assinatura', 'Pagamentos'], ['s_suporte', 'suporte', 'Suporte'], ['s_config', 'conta', 'Preços e conta'], ['perfil', 'registo', 'Senha'], ['sair', 'sair', 'Sair']];
 function shell(items) {
   const sub = S.loja ? S.loja.nome : 'Dono do sistema';
   $('#app').innerHTML = `<div class="shell"><aside class="side"><div class="brandrow">${logo(34)}<div><b>GestMZ</b><small>${esc(sub)}</small></div></div><nav id="nav" aria-label="Menu principal"></nav><div class="me">${avatar(S.perfil)}<div><b>${esc(S.perfil.nome)}</b><span>${PAPEL[S.perfil.papel]}</span></div></div></aside><div style="flex:1;min-width:0"><div id="banner"></div><div id="topline"></div><main id="main"></main></div></div>`;
@@ -573,6 +575,7 @@ async function fimDaEntrada() {
   const ok = window.GestLegal ? await GestLegal.exigirAceitacao() : true;
   if (!ok || !S.perfil) return;   // escolheu «Sair»: nada mais aparece
   primeiraAjuda();
+  if (window.GestAtividade) GestAtividade.iniciar();
   if (window.GestMZAtualizacao) GestMZAtualizacao.aposEntrar();
 }
 function primeiraAjuda() { const k = 'gestmz_ajuda_' + S.perfil.id; if (!lsGet(k)) { lsSet(k, '1'); if (VIEWS.ajudaSlides) VIEWS.ajudaSlides(); } }

@@ -378,3 +378,19 @@ td.n,td.nowrap{white-space:nowrap}
   main .tw td.act{justify-content:flex-end;flex-wrap:wrap;white-space:normal}
   main .tw td.n,main .tw td.nowrap{white-space:normal}
 }
+
+/* atividade das lojas (superadmin) */
+.est{display:inline-flex;align-items:center;gap:7px}
+.est.small{font-size:12px}
+.pt{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);opacity:.6;flex:none}
+.pt.on{background:var(--ok);opacity:1;box-shadow:0 0 0 0 rgba(0,160,120,.5);animation:pt-pulso 1.8s ease-out infinite}
+.pt.nunca{background:transparent;border:1.5px solid var(--muted)}
+@keyframes pt-pulso{0%{box-shadow:0 0 0 0 rgba(0,160,120,.45)}100%{box-shadow:0 0 0 8px rgba(0,160,120,0)}}
+@media (prefers-reduced-motion:reduce){.pt.on{animation:none}}
+.dias14{display:inline-flex;gap:2px;align-items:flex-end}
+.dias14 i{width:7px;height:16px;border-radius:2px;background:var(--line)}
+.dias14 i.on{background:var(--brand)}
+.atencao{margin:0;padding-left:18px;display:grid;gap:6px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:99px;padding:7px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
