@@ -19,8 +19,6 @@ Q -f "$R/supabase/migracao_16_stock_fotos_notificacoes_caixa.sql" >/dev/null || 
 ANTES=$(Q -At -c "select (select count(*) from public.lojas)||'/'||(select count(*) from public.vendas)||'/'||(select count(*) from public.produtos)||'/'||(select count(*) from public.perfis)||'/'||(select count(*) from public.clientes)")
 Q -f "$R/supabase/migracao_17_atividade_lojas.sql" >/dev/null || { echo "migração 17 falhou"; exit 3; }
 [ "${GESTMZ_DUAS:-}" = 1 ] && { Q -f "$R/supabase/migracao_17_atividade_lojas.sql" >/dev/null || { echo "migração 17 falhou na 2.ª execução (idempotência)"; exit 3; }; }
-Q -f "$R/supabase/migracao_18_atividade_sem_dispositivo.sql" >/dev/null || { echo "migração 18 falhou"; exit 3; }
-[ "${GESTMZ_DUAS:-}" = 1 ] && { Q -f "$R/supabase/migracao_18_atividade_sem_dispositivo.sql" >/dev/null || { echo "migração 18 falhou na 2.ª execução (idempotência)"; exit 3; }; }
 DEPOIS=$(Q -At -c "select (select count(*) from public.lojas)||'/'||(select count(*) from public.vendas)||'/'||(select count(*) from public.produtos)||'/'||(select count(*) from public.perfis)||'/'||(select count(*) from public.clientes)")
 Q -f "$D/07_atividade.sql" >/dev/null
 Q -At -F ' | ' -c "select case when ok then 'PASSA' else 'FALHA' end, nome, case when ok then '' else obtido end from t.res order by n"
