@@ -1,4 +1,4 @@
-const CACHE = 'gestmz-v24';
+const CACHE = 'gestmz-v25';
 const FILES = ['./', './index.html', './style.css', './config.js', './core.js', './super.js', './loja.js', './loja2.js', './extra.js', './fotos.js', './notif.js', './caixa.js', './legal.js', './puxar.js', './atividade.js', './layout.js', './copia.js', './totp.js', './recibo.js', './versao.js', './atualizacao.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

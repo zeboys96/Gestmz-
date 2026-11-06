@@ -275,7 +275,22 @@ tr.off td{opacity:.5;text-decoration:line-through}
 /* aviso de atualização (Android e Windows) */
 .upd{position:fixed;left:12px;right:12px;bottom:84px;z-index:90;display:flex;justify-content:center;pointer-events:none}
 .upd-c{pointer-events:auto;max-width:520px;width:100%;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--sun);border-radius:14px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:flex;flex-direction:column;gap:6px;font-size:14px}
-.upd-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.upd-c{flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px;animation:upd-sobe .35s ease-out both}
+.upd-i{width:40px;height:40px;border-radius:12px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;flex:none}
+.upd-i svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.upd-x{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}.upd-x b{font-size:15px}.upd-x span{font-size:13px;color:var(--muted)}
+.upd-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:0;width:100%}.upd-b .btn{flex:1;min-width:0}
+@keyframes upd-sobe{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+/* janela de atualização */
+.upd-hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:6px 0 2px}
+.upd-hero img{border-radius:16px;box-shadow:0 6px 18px rgba(0,0,0,.18)}.upd-hero>b{font-size:20px;letter-spacing:-.01em}
+.upd-ver{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}.upd-ver i{font-style:normal;padding:4px 12px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-weight:600;color:var(--muted)}
+.upd-ver i.novo{background:var(--brand);border-color:var(--brand);color:#fff}.upd-ver em{font-style:normal;color:var(--muted)}
+.upd-hero small{color:var(--muted)}
+.upd-t{text-align:center;margin:12px 6px 4px;font-size:15px}.upd-s{text-align:center;margin:6px 0 12px}
+.upd-ir{padding:14px;font-size:16px;border-radius:14px}
+.upd-modal .mf{justify-content:center}
+@media(prefers-reduced-motion:reduce){.upd-c{animation:none}}
 .upd.bloq{inset:0;bottom:0;left:0;right:0;align-items:center;background:rgba(0,0,0,.6);pointer-events:auto}
 
 /* ---------- linha de topo: sino e «Fechar caixa» ---------- */

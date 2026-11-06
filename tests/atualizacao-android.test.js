@@ -83,3 +83,12 @@ rodar('atualização Android: se o Android recusar a instalação, mostra o cód
   assert.ok(!/github/i.test(await p.locator('#upd-estado').innerText())); assert.ok(await p.locator('#upd-go').isEnabled());
   assert.deepStrictEqual(erros, []); await ctx.close();
 });
+
+rodar('atualização Android: janela sóbria (versões, tamanho, texto geral, sem notas técnicas) e sem aviso duplicado', async (b, url) => {
+  const { ctx, p } = await abrir(b, url, { nativo: true, pode: true });
+  const tx = await p.locator('#upd-modal').innerText();
+  assert.ok(/Nova versão disponível/.test(tx) && /melhorias/i.test(tx), 'texto geral'); assert.ok(/1\.1\.\d+/.test(tx), 'mostra as versões');
+  assert.ok(!/navegador|github|https?:/i.test(tx), 'sem detalhes técnicos'); assert.strictEqual(await p.locator('#upd').count(), 0, 'sem aviso duplicado com a janela aberta');
+  assert.strictEqual(await p.locator('#upd-go').innerText(), 'Atualizar agora'); assert.strictEqual(await p.locator('#upd-nav').count(), 0);
+  await p.screenshot({ path: process.env.GESTMZ_SHOT || '/dev/null' }).catch(() => {}); await ctx.close();
+});

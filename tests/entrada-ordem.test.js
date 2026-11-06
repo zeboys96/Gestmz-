@@ -48,7 +48,7 @@ test('entrada: depois de aceitar vem o guia (uma vez) e só então, com a loja a
     await p.check('#lg-ck'); await p.click('#lg-ok'); await p.waitForSelector('#sl');
     assert.strictEqual(await visivel(p, '#legal-gate'), 0); assert.strictEqual(await visivel(p, '#upd'), 0, 'aviso ainda não');
     await p.evaluate(() => { document.querySelectorAll('.modal').forEach(m => m.remove()); GestMZAtualizacao.aposEntrar(100); });
-    await p.waitForSelector('#upd'); assert.ok(/Nova versão/.test(await p.locator('#upd').innerText()));
+    await p.waitForSelector('#upd'); assert.ok(/Atualização disponível/.test(await p.locator('#upd').innerText()));
     await p.evaluate(() => sair()); await p.waitForSelector('#f'); assert.strictEqual(await visivel(p, '#upd'), 0, 'aviso some ao sair'); assert.strictEqual(await visivel(p, '.modal'), 0);
     const b0 = await p.evaluate(() => window.__buscas); await p.waitForTimeout(400);
     await p.evaluate(() => { S.perfil = { papel: 'caixa', id: 'u1', nome: 'T', loja_id: 'l1' }; window.__sess = true; });
