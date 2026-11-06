@@ -1,2 +1,2 @@
 /* Versão desta compilação (Android e Windows lêem a deles próprios; isto serve a web e verificações). Mantida por scripts/verificar-versoes.js. */
-window.GESTMZ_VERSAO = { versao: '1.1.9', codigo: 10109 };
+window.GESTMZ_VERSAO = { versao: '1.1.10', codigo: 10110 };
