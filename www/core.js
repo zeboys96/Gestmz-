@@ -453,6 +453,7 @@ async function carregarLoja() {
   ]);
   S.loja = lj; S.plat = pl[0] || null; S.cats = cats; S.clientes = cli; S.equipa = eq;
   S.produtos = juntar(prods, lotes); guardarCache();
+  if (typeof reciboCarregarCfg === 'function') reciboCarregarCfg();   // personalização do recibo (sem bloquear a entrada)
 }
 const juntar = (prods, lotes) => prods.map(p => ({ ...p, lotes: lotes.filter(l => l.produto_id === p.id) }));
 async function recarregarProdutos() {
