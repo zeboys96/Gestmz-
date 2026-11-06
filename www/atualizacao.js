@@ -57,7 +57,7 @@
       for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) { if ((a[i] || 0) < (b[i] || 0)) return { estado: 'incompativel', motivo: 'Precisa do Windows ' + r.windows_min + ' ou mais recente.' }; break; } }
     }
     const obrig = e.minima != null && comparar(instalada, e.minima) < 0;
-    return { estado: obrig ? 'obrigatoria' : 'disponivel', ultima: e.ultima, bloquear: !!(obrig && e.bloquear), notas: e.notas || [], url: e.url, sha256: e.sha256 || null, publicada_em: e.publicada_em };
+    return { estado: obrig ? 'obrigatoria' : 'disponivel', ultima: e.ultima, bloquear: !!(obrig && e.bloquear), notas: e.notas || [], url: e.url, sha256: e.sha256 || null, publicada_em: e.publicada_em, tamanho: e.tamanho || null };
   }
 
   function texto(d, instalada) {
@@ -133,7 +133,7 @@
     if (P.Browser && P.Browser.open) return P.Browser.open({ url });
     raiz.open(url, '_blank', 'noopener');
   }
-  const MSG_ANDROID = 'A atualização é transferida aqui, dentro do GestMZ. Quando terminar, o Android pede-lhe para confirmar a instalação. Os seus dados mantêm-se.';
+  const MSG_ANDROID = 'Os seus dados e vendas mantêm-se.';
   const MSG_NAVEGADOR = 'O Android vai transferir o ficheiro. Quando terminar, toque nele na notificação e escolha Instalar. Os seus dados mantêm-se.';
 
   /* Transferência DENTRO da app (sem abrir o navegador nem mostrar o endereço): descarrega para a cache, o plugin nativo confere o SHA-256 e o
@@ -170,7 +170,8 @@
     } finally { if (ouvinte && ouvinte.remove) { try { await ouvinte.remove(); } catch (e) { /* ok */ } } }
   }
   function detalhesAndroid(d) {
-    const w = raiz.modal('Atualização ' + esc(d.ultima), '<p>' + esc(d.texto) + '</p>' + notasHTML(d) + '<p class="muted small" id="upd-estado">' + esc(nativo() ? MSG_ANDROID : MSG_NAVEGADOR) + '</p><div id="upd-barra"></div><button type="button" class="btn block" id="upd-go">Atualizar ' + esc(d.ultima) + '</button>', { sticky: true });
+    const w = raiz.modal('Atualização', corpoJanela(d, nativo() ? MSG_ANDROID : MSG_NAVEGADOR), { sticky: !!d.bloquear, cancelText: d.bloquear ? 'Sair da app' : 'Mais tarde', onClose: () => { if (!d.bloquear) adiar(d.ultima); } });
+    w.m.classList.add('upd-modal'); w.m.id = 'upd-modal'; const rm = $('#upd', document); if (rm) rm.remove();
     const est = $('#upd-estado', w.m), barra = $('#upd-barra', w.m), go = $('#upd-go', w.m); let ocupado = false;
     // o Android pode recusar a instalação depois de a pessoa a iniciar: mostra o motivo (código curto) e oferece a alternativa
     try { const I = (raiz.Capacitor && raiz.Capacitor.Plugins && raiz.Capacitor.Plugins.GestMZInstalador); if (I && I.addListener) I.addListener('instalacao', ev => { if (!w.m.isConnected) return; falhou('A instalação não foi concluída (código: ' + (ev && ev.codigo != null ? ev.codigo : 'erro') + '). Tente de novo.'); }); } catch (e) { /* ok */ }
@@ -181,7 +182,7 @@
       go.disabled = true; go.textContent = 'A transferir…'; est.textContent = 'A transferir a atualização…'; barra.innerHTML = '<progress max="100" value="0" style="width:100%"></progress>';
       try {
         const r = await transferirAndroid(d, n => { est.textContent = 'A transferir a atualização… ' + n + '%'; const pg = $('progress', barra); if (pg) pg.value = n; });
-        if (r === 'permissao') { est.textContent = 'Para instalar, permita nesta janela do Android que o GestMZ instale atualizações. Depois volte aqui e toque em «Atualizar».'; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Atualizar ' + d.ultima; ocupado = false; return; }
+        if (r === 'permissao') { est.textContent = 'Para instalar, permita nesta janela do Android que o GestMZ instale atualizações. Depois volte aqui e toque em «Atualizar».'; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Atualizar agora'; ocupado = false; return; }
         est.textContent = 'Transferida. Confirme a instalação no ecrã do Android. Os seus dados mantêm-se.'; barra.innerHTML = ''; go.disabled = false; go.textContent = 'Instalar de novo'; ocupado = false;
       } catch (e) {
         const c = String(e && (e.message || e)); falhou(/sha256|pacote/.test(c) ? 'A atualização transferida não passou na verificação de segurança e foi descartada. Tente de novo mais tarde.' : navigator.onLine === false ? 'Sem internet. Ligue-se e tente de novo.' : 'Não foi possível transferir a atualização. Tente de novo.' + (/^[a-z0-9-]{2,20}$/.test(c) ? ' (código: ' + c + ')' : ''));
@@ -189,6 +190,19 @@
     };
   }
 
+
+  function tamanhoTxt(n) { return n > 0 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : ''; }
+  function dataTxt(v) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ''); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; }
+  const SETA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+  /* janela única e sóbria: versão, tamanho, uma frase geral (sem listar funcionalidades) e o botão principal */
+  function corpoJanela(d, msg) {
+    const meta = [tamanhoTxt(d.tamanho), dataTxt(d.publicada_em)].filter(Boolean).join(' · ');
+    return '<div class="upd-hero">' + (typeof logo === 'function' ? logo(64) : '') + '<b>' + esc(d.bloquear ? 'Atualização necessária' : 'Nova versão disponível') + '</b>' +
+      '<span class="upd-ver"><i>' + esc(d.instalada || '') + '</i><em aria-hidden="true">→</em><i class="novo">' + esc(d.ultima) + '</i></span>' + (meta ? '<small>' + esc(meta) + '</small>' : '') + '</div>' +
+      '<p class="upd-t">Novas melhorias de desempenho e estabilidade para o seu dia a dia.</p>' +
+      '<p class="muted small upd-s" id="upd-estado">' + esc(msg) + '</p><div id="upd-barra"></div>' +
+      '<button type="button" class="btn block upd-ir" id="upd-go">Atualizar agora</button>';
+  }
   function notasHTML(d) { return d.notas && d.notas.length ? '<ul>' + d.notas.map(n => '<li>' + esc(n) + '</li>').join('') + '</ul>' : ''; }
 
   function detalhes(d) {
@@ -217,7 +231,7 @@
     const velho = $('#upd'); if (velho) velho.remove();
     const el = document.createElement('div');
     el.id = 'upd'; el.className = 'upd' + (d.bloquear ? ' bloq' : ''); el.setAttribute('role', 'alert');
-    el.innerHTML = '<div class="upd-c"><b>' + esc(d.bloquear ? 'Atualização obrigatória' : 'Nova versão do GestMZ') + '</b><span>' + esc(d.texto) + '</span><div class="upd-b"><button type="button" class="btn sun" data-ver>Ver e atualizar</button>' + (d.bloquear ? '' : '<button type="button" class="btn ghost" data-depois>Mais tarde</button>') + '</div></div>';
+    el.innerHTML = '<div class="upd-c"><span class="upd-i">' + SETA + '</span><div class="upd-x"><b>' + esc(d.bloquear ? 'Atualização necessária' : 'Atualização disponível') + '</b><span>Versão ' + esc(d.ultima) + ' · melhorias e correções</span></div><div class="upd-b"><button type="button" class="btn sun" data-ver>Atualizar</button>' + (d.bloquear ? '' : '<button type="button" class="btn ghost" data-depois>Mais tarde</button>') + '</div></div>';
     document.body.appendChild(el);
     $('[data-ver]', el).onclick = () => detalhes(d);
     const dp = $('[data-depois]', el); if (dp) dp.onclick = () => { adiar(d.ultima); el.remove(); };
