@@ -314,7 +314,15 @@ tr.off td{opacity:.5;text-decoration:line-through}
 .fotobtn{display:flex;gap:8px;flex-wrap:wrap}
 
 /* ---------- puxar para atualizar ---------- */
-html,body{overscroll-behavior-y:contain}
+html,body{overscroll-behavior-y:contain;max-width:100%;overflow-x:hidden}
+body{position:relative}
+.me b,.me span,.modal .box,.box p,.box li,.card,.sub,.muted,b{overflow-wrap:anywhere}
+td{overflow-wrap:break-word}
+.me>div{min-width:0}
+.box,.card{min-width:0;max-width:100%}
+table{max-width:100%}
+#app,.shell{max-width:100vw}
+@media(max-width:900px){.side{transform:translateZ(0);-webkit-transform:translateZ(0);will-change:transform;max-width:100vw}}
 #ptr{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translate(-50%,-60px);z-index:95;width:42px;height:42px;display:flex;align-items:center;justify-content:center;background:var(--surface);color:var(--brand);border:1px solid var(--line);border-radius:50%;box-shadow:0 6px 20px rgba(0,0,0,.18);pointer-events:none;transition:opacity .2s}
 #ptr[hidden]{display:none}
 #ptr svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;transition:transform .15s}

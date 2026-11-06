@@ -52,7 +52,7 @@ rodar('atualização Android: sem permissão para instalar, abre a definição d
 
 rodar('atualização Android: se a verificação de segurança falhar, mostra o erro sem endereço e só então oferece o navegador', async (b, url) => {
   const { ctx, p } = await abrir(b, url, { nativo: true, pode: true, instalarErro: 'sha256' });
-  assert.ok(await p.locator('#upd-nav').isVisible(), 'a alternativa do navegador está sempre disponível, discreta');
+  assert.ok(!(await p.locator('#upd-nav').isVisible()), 'a alternativa do navegador não aparece enquanto não houver falha');
   await p.click('#upd-go'); await p.waitForFunction(() => /verificação de segurança/.test(document.querySelector('#upd-estado').textContent));
   assert.strictEqual(await p.locator('#upd-go').innerText(), 'Tentar de novo'); assert.ok(!/github|https?:/i.test(await p.locator('.modal').innerText())); assert.ok(await p.locator('#upd-nav').isVisible(), 'último recurso disponível');
   await p.click('#upd-nav'); const l = await p.evaluate(() => window.__l); assert.strictEqual(l.br.length, 1, 'só abre o navegador por escolha da pessoa'); await ctx.close();
