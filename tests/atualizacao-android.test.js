@@ -52,10 +52,10 @@ rodar('atualização Android: sem permissão para instalar, abre a definição d
 
 rodar('atualização Android: se a verificação de segurança falhar, mostra o erro sem endereço e só então oferece o navegador', async (b, url) => {
   const { ctx, p } = await abrir(b, url, { nativo: true, pode: true, instalarErro: 'sha256' });
-  assert.ok(!(await p.locator('#upd-nav').isVisible()), 'a alternativa do navegador não aparece enquanto não houver falha');
+  assert.strictEqual(await p.locator('#upd-nav').count(), 0, 'não há opção de navegador');
   await p.click('#upd-go'); await p.waitForFunction(() => /verificação de segurança/.test(document.querySelector('#upd-estado').textContent));
-  assert.strictEqual(await p.locator('#upd-go').innerText(), 'Tentar de novo'); assert.ok(!/github|https?:/i.test(await p.locator('.modal').innerText())); assert.ok(await p.locator('#upd-nav').isVisible(), 'último recurso disponível');
-  await p.click('#upd-nav'); const l = await p.evaluate(() => window.__l); assert.strictEqual(l.br.length, 1, 'só abre o navegador por escolha da pessoa'); await ctx.close();
+  assert.strictEqual(await p.locator('#upd-go').innerText(), 'Tentar de novo'); assert.ok(!/github|https?:/i.test(await p.locator('.modal').innerText())); 
+  const l = await p.evaluate(() => window.__l); assert.strictEqual(l.br.length, 0, 'nunca abre o navegador'); await ctx.close();
 });
 
 rodar('atualização Android: numa versão antiga da app (sem instalador interno) continua a funcionar pelo navegador', async (b, url) => {
@@ -72,7 +72,7 @@ rodar('atualização Android (1.1.4+): usa o descarregador próprio do plugin, c
   assert.deepStrictEqual(erros, []); await ctx.close();
   const f = await abrir(b, url, { proprio: true, pode: true, transfErro: 'http-404' });
   await f.p.click('#upd-go'); await f.p.waitForFunction(() => /código: http-404/.test(document.querySelector('#upd-estado').textContent));
-  assert.ok(await f.p.locator('#upd-nav').isVisible(), 'aparece a alternativa'); assert.ok(!/github/i.test(await f.p.locator('#upd-estado').innerText())); await f.ctx.close();
+  assert.ok(!/github/i.test(await f.p.locator('#upd-estado').innerText())); await f.ctx.close();
 });
 
 rodar('atualização Android: se o Android recusar a instalação, mostra o código curto e oferece a alternativa', async (b, url) => {
@@ -80,6 +80,6 @@ rodar('atualização Android: se o Android recusar a instalação, mostra o cód
   await p.click('#upd-go'); await p.waitForFunction(() => /Confirme a instalação/.test(document.querySelector('#upd-estado').textContent));
   await p.evaluate(() => window.__evInst({ codigo: 4, mensagem: 'INSTALL_FAILED_INVALID_APK' }));
   await p.waitForFunction(() => /código: 4/.test(document.querySelector('#upd-estado').textContent));
-  assert.ok(await p.locator('#upd-nav').isVisible()); assert.ok(!/github/i.test(await p.locator('#upd-estado').innerText())); assert.ok(await p.locator('#upd-go').isEnabled());
+  assert.ok(!/github/i.test(await p.locator('#upd-estado').innerText())); assert.ok(await p.locator('#upd-go').isEnabled());
   assert.deepStrictEqual(erros, []); await ctx.close();
 });
