@@ -3,20 +3,20 @@
   "atualizado_em": "2026-11-06",
   "plataformas": {
     "android": {
-      "ultima": "1.1.8",
+      "ultima": "1.1.9",
       "minima": "1.0.0",
       "bloquear": false,
       "publicada_em": "2026-11-06",
-      "url": "https://github.com/zeboys96/Gestmz-/releases/download/v1.1.8/GestMZ-1.1.8-android.apk",
-      "sha256": "c695ee6af0aba4cea40fbeb90194e2d85509377e2d97e3a70e26627ea2d43fb8",
+      "url": "https://github.com/zeboys96/Gestmz-/releases/download/v1.1.9/GestMZ-1.1.9-android.apk",
+      "sha256": "9327f435cca9f4ab3d5ef4573886411d37b3bec32bee2c9894b4ae399adc6b3f",
       "notas": [
-        "Novo ecrã Atividade para o administrador",
-        "Dicas de boas-vindas mais curtas e simples"
+        "Ecrã mais estável no telemóvel (sem zoom, barra de baixo fixa, e-mails longos)",
+        "Alternativa do navegador só aparece se a atualização falhar"
       ],
       "requisitos": {
         "android_min": 8
       },
-      "tamanho": 3417194
+      "tamanho": 3417328
     },
     "windows": {
       "ultima": null,
