@@ -1,21 +1,21 @@
 {
   "esquema": 1,
-  "atualizado_em": "2026-11-06",
+  "atualizado_em": "2026-11-07",
   "plataformas": {
     "android": {
-      "ultima": "1.1.11",
+      "ultima": "1.1.12",
       "minima": "1.0.0",
       "bloquear": false,
-      "publicada_em": "2026-11-06",
-      "url": "https://github.com/zeboys96/Gestmz-/releases/download/v1.1.11/GestMZ-1.1.11-android.apk",
-      "sha256": "80067f085447317b8e3b51c377abee8ef3b73bf11f3d8d1670e8fe07529ad574",
+      "publicada_em": "2026-11-07",
+      "url": "https://github.com/zeboys96/Gestmz-/releases/download/v1.1.12/GestMZ-1.1.12-android.apk",
+      "sha256": "5672c8bad071ddb8d2c5d26d79172ed7679a18fe943153abab889d0d5f8e2b6e",
       "notas": [
-        "Novas melhorias de desempenho e estabilidade"
+        "Novo recibo de venda e impressão direta em impressoras térmicas"
       ],
       "requisitos": {
         "android_min": 8
       },
-      "tamanho": 3418145
+      "tamanho": 3430614
     },
     "windows": {
       "ultima": null,
