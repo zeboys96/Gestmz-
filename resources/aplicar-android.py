@@ -80,7 +80,8 @@ if not os.path.isfile(MAIN): erro('não encontrei MainActivity.java em ' + os.pa
 ma = open(MAIN, encoding='utf-8').read()
 if 'extends BridgeActivity' not in ma or 'package mz.gestmz.app' not in ma: erro('MainActivity.java não tem a forma esperada (modelo do Capacitor mudou).')
 shutil.copy2(os.path.join(RAIZ, 'resources', 'android', 'java', 'GestMZInstalador.java'), os.path.join(JAVA, 'GestMZInstalador.java'))
-if 'registerPlugin(GestMZInstalador.class)' not in ma:
+shutil.copy2(os.path.join(RAIZ, 'resources', 'android', 'java', 'GestMZImpressora.java'), os.path.join(JAVA, 'GestMZImpressora.java'))
+if 'registerPlugin(GestMZInstalador.class)' not in ma or 'registerPlugin(GestMZImpressora.class)' not in ma:
     open(MAIN, 'w', encoding='utf-8').write("""package mz.gestmz.app;
 
 import android.os.Bundle;
@@ -90,6 +91,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(GestMZInstalador.class);
+        registerPlugin(GestMZImpressora.class);
         super.onCreate(savedInstanceState);
     }
 }
@@ -98,6 +100,12 @@ man = open(MANIFESTO, encoding='utf-8').read()
 if 'REQUEST_INSTALL_PACKAGES' not in man:
     if '</manifest>' not in man: erro('AndroidManifest.xml sem </manifest>')
     man = man.replace('</manifest>', '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>')
+if 'BLUETOOTH_CONNECT' not in man:
+    if '</manifest>' not in man: erro('AndroidManifest.xml sem </manifest>')
+    man = man.replace('</manifest>', '''    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+</manifest>''')
 if 'gestmzprovider' not in man:
     if '</application>' not in man: erro('AndroidManifest.xml sem </application>')
     man = man.replace('</application>', """    <provider
@@ -140,4 +148,8 @@ open(GRADLE, 'w', encoding='utf-8').write(g)
 if glob.glob(os.path.join(RES, 'drawable*', 'splash.png')): erro('ficou um splash.png do Capacitor')
 for f in ('mipmap-xxxhdpi/ic_launcher.png', 'mipmap-xxxhdpi/ic_launcher_foreground.png', 'mipmap-anydpi-v26/ic_launcher.xml', 'drawable/gestmz_splash.xml', 'drawable-nodpi/gestmz_splash_icon.png'):
     if not os.path.isfile(os.path.join(RES, f)): erro('falta ' + f)
+for f in ('GestMZInstalador.java', 'GestMZImpressora.java'):
+    if not os.path.isfile(os.path.join(JAVA, f)): erro('falta ' + f)
+if 'registerPlugin(GestMZImpressora.class)' not in open(MAIN, encoding='utf-8').read(): erro('o plugin da impressora não ficou registado')
+if 'BLUETOOTH_CONNECT' not in open(MANIFESTO, encoding='utf-8').read(): erro('a permissão de Bluetooth não ficou no manifesto')
 print('Identidade GestMZ aplicada ao projecto Android.')

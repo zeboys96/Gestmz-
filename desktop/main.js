@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, Menu, protocol, net, session, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, protocol, net, session, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { autoUpdater } = require('electron-updater');
@@ -66,8 +66,21 @@ app.whenReady().then(() => {
   servir();
   // só a própria aplicação pode usar a câmara; tudo o resto é recusado
   const origemApp = wc => { try { return wc.getURL().startsWith(ORIGEM + '/'); } catch (e) { return false; } };
-  session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb(perm === 'media' && origemApp(wc)));
-  session.defaultSession.setPermissionCheckHandler((wc, perm) => perm === 'media' && !!wc && origemApp(wc));
+  // câmara e impressoras (USB / porta série) só para a própria aplicação; tudo o resto é recusado
+  const permitido = p => p === 'media' || p === 'usb' || p === 'serial';
+  session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb(permitido(perm) && origemApp(wc)));
+  session.defaultSession.setPermissionCheckHandler((wc, perm) => permitido(perm) && !!wc && origemApp(wc));
+  session.defaultSession.setDevicePermissionHandler(d => (d.deviceType === 'usb' || d.deviceType === 'serial') && !!d.origin && d.origin.startsWith(ORIGEM));
+  // o Electron não tem janela de escolha própria: mostramos a lista de impressoras e a pessoa escolhe
+  const escolherLista = async (wc, lista, nomear, cb) => {
+    if (!lista.length) { cb(''); return; }
+    const r = await dialog.showMessageBox(BrowserWindow.fromWebContents(wc) || undefined, { type: 'question', title: 'Impressora', message: 'Escolha a impressora', buttons: [...lista.map(nomear), 'Cancelar'], cancelId: lista.length, defaultId: 0, noLink: true });
+    cb(r.response < lista.length ? (lista[r.response].portId || lista[r.response].deviceId) : '');
+  };
+  app.on('web-contents-created', (_e, wc) => {
+    wc.session.on('select-serial-port', (ev, portas, wc2, cb) => { ev.preventDefault(); escolherLista(wc2, portas, p => (p.displayName || p.portName || 'Porta') + (p.vendorId ? ' (' + p.vendorId + ':' + p.productId + ')' : ''), cb); });
+    wc.session.on('select-usb-device', (ev, dispositivos, cb) => { ev.preventDefault(); escolherLista(wc, dispositivos, d => d.productName || ('USB ' + d.vendorId + ':' + d.productId), cb); });
+  });
   criarJanela();
   app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) criarJanela(); });
 });

@@ -65,14 +65,14 @@ function reciboModelo(v) {
   };
 }
 /* ---------- disposição do recibo (linhas), igual no ecrã, na impressão e no PDF ---------- */
-function reciboLinhas(m, cols, cfg) {
+function reciboLinhas(m, cols, cfg, termico) {
   cfg = cfg || reciboCfg(); const mo = cfg.mostrar, out = [];
   const ajusta = s => s > 1 ? cols / Math.floor(cols / s) : 1, larg = s => Math.max(8, Math.floor(cols / (s || 1) + 1e-9));   // tamanhos maiores ocupam a largura toda
   const quebra = (t, n) => { const r = []; let l = ''; for (let w of String(t == null ? '' : t).split(/\s+/).filter(Boolean)) { while (w.length > n) { if (l) { r.push(l); l = ''; } r.push(w.slice(0, n)); w = w.slice(n); } if (!l) l = w; else if ((l + ' ' + w).length <= n) l += ' ' + w; else { r.push(l); l = w; } } if (l) r.push(l); return r; };
   const cen = (t, n) => ' '.repeat(Math.max(0, Math.floor((n - t.length) / 2))) + t;
-  const txt = (t, o) => { o = Object.assign({}, o); if (o.s) o.s = ajusta(o.s); const n = larg(o.s); quebra(t, n).forEach(x => out.push({ k: 't', t: o.c ? cen(x, n) : x, b: !!o.b, s: o.s || 1 })); };
-  const par = (a, b, o) => { o = Object.assign({}, o); if (o.s) o.s = ajusta(o.s); const n = larg(o.s); b = String(b); const ls = quebra(a, Math.max(4, n - b.length - 1)); if (!ls.length) ls.push('');
-    ls.forEach((x, i) => { const ult = i === ls.length - 1; out.push({ k: 't', t: ult ? x + ' '.repeat(Math.max(1, n - x.length - b.length)) + b : x, b: !!o.b, s: o.s || 1 }); }); };
+  const txt = (t, o) => { o = Object.assign({}, o); const g = o.s > 1; if (o.s) o.s = termico ? 1 : ajusta(o.s); const n = larg(o.s); quebra(t, n).forEach(x => out.push({ k: 't', t: o.c ? cen(x, n) : x, b: !!o.b, s: o.s || 1, g })); };
+  const par = (a, b, o) => { o = Object.assign({}, o); const g = o.s > 1; if (o.s) o.s = termico ? 1 : ajusta(o.s); const n = larg(o.s); b = String(b); const ls = quebra(a, Math.max(4, n - b.length - 1)); if (!ls.length) ls.push('');
+    ls.forEach((x, i) => { const ult = i === ls.length - 1; out.push({ k: 't', t: ult ? x + ' '.repeat(Math.max(1, n - x.length - b.length)) + b : x, b: !!o.b, s: o.s || 1, g }); }); };
   const kv = (a, b) => { const w = 10, n = cols - w; quebra(b, n).forEach((x, i) => out.push({ k: 't', t: (i ? ' '.repeat(w) : a.padEnd(w)) + x, b: false, s: 1 })); };
   const hr = ch => out.push({ k: 'hr', ch: ch || '-' }), sp = () => out.push({ k: 'sp' });
   // cabeçalho
@@ -203,11 +203,51 @@ async function imprimirRecibo(v) {
   } catch (e) { toast('Não foi possível imprimir: ' + (e.message || e) + '. Use «Guardar em PDF».', true); }
 }
 
+/* ---------- impressão térmica direta (ESC/POS) ---------- */
+const imprimirDireto = async v => {
+  const c = GestImpressora.ler(); if (!c || !c.via) throw new Error('Configure primeiro a impressora térmica.');
+  const k = papelAtual() === 'a4' ? '80' : papelAtual(), cfg = reciboCfg(), pix = await reciboPrepararLogo(cfg);
+  const lin = reciboLinhas(reciboModelo(v), GestEscPos.COLS[k], cfg, true);
+  const bytes = GestEscPos.codificar(lin, { cols: GestEscPos.COLS[k], cp: c.cp || '850', cortar: c.cortar !== false, logo: cfg.mostrar.logo ? pix : null, pontos: GestEscPos.PONTOS[k] });
+  await GestImpressora.enviar(bytes, c);
+};
+async function imprimirDiretoUI(v, btn) {
+  const t = btn && btn.textContent; if (btn) { btn.disabled = true; btn.textContent = 'A imprimir…'; }
+  try { await imprimirDireto(v); toast('Enviado para a impressora.'); } catch (e) { toast('Não foi possível imprimir: ' + (e && e.message ? e.message : e), true); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = t; } }
+}
+function impressoraConfigurar(depois) {
+  const vias = GestImpressora.vias(), disp = Object.keys(vias).filter(k => vias[k]), c0 = GestImpressora.ler() || {};
+  if (!disp.length) return modal('Impressora térmica', '<p>Este aparelho ou navegador não permite ligar impressoras diretamente. Use <b>Imprimir recibo</b> ou <b>Guardar em PDF</b>.</p><p class="muted small">No Android, use a app GestMZ (Bluetooth). No computador, use o Chrome ou o Edge (USB ou porta série).</p>', { okText: 'Fechar' });
+  let sel = Object.assign({}, c0); if (!sel.via || !disp.includes(sel.via)) sel.via = disp[0];
+  const w = modal('Impressora térmica', `<div id="imf">
+    <p class="muted small">Imprime direto na impressora de talões (ESC/POS), sem janelas de impressão. O papel (58 ou 80 mm) escolhe-se no recibo.</p>
+    <label class="lbl">Ligação<select id="imv" class="in">${disp.map(k => `<option value="${k}" ${sel.via === k ? 'selected' : ''}>${GestImpressora.NOMES[k]}</option>`).join('')}</select></label>
+    <div id="imd"></div>
+    <label class="lbl">Acentos<select id="imc" class="in">${opts([['850', 'Português (PC850), recomendado'], ['858', 'Português (PC858)'], ['860', 'Português (PC860)'], ['ascii', 'Sem acentos (se sair lixo)']], c0.cp || '850')}</select></label>
+    <label class="chk"><input type="checkbox" id="imx" ${c0.cortar === false ? '' : 'checked'}> Cortar o papel no fim</label>
+    <div class="mf"><button type="button" class="btn ghost" id="imt">Imprimir teste</button></div></div>`, { okText: 'Guardar', onOk: async () => { guardarSel(); toast('Impressora guardada.'); if (depois) depois(); } });
+  const guardarSel = () => { const c = Object.assign({}, sel, { via: $('#imv', w.m).value, cp: $('#imc', w.m).value, cortar: $('#imx', w.m).checked }); GestImpressora.guardar(c); return c; };
+  const desenhar = async () => {
+    const via = $('#imv', w.m).value, box = $('#imd', w.m); sel.via = via;
+    if (via === 'bt') { box.innerHTML = '<p class="muted small">A procurar impressoras emparelhadas…</p>';
+      try { const l = await GestImpressora.emparelhadas(); box.innerHTML = l.length ? `<label class="lbl">Impressora emparelhada<select id="imb" class="in">${opts(l.map(d => [d.endereco, d.nome || d.endereco]), sel.endereco || (l[0] && l[0].endereco))}</select></label><p class="muted small">Não aparece? Emparelhe-a antes nas definições de Bluetooth do Android.</p>` : '<p>Nenhuma impressora emparelhada. Ligue a impressora, emparelhe-a em Definições → Bluetooth e volte aqui.</p>';
+        const b = $('#imb', w.m); if (b) { const f = () => { sel.endereco = b.value; sel.nome = b.options[b.selectedIndex].text; }; b.onchange = f; f(); } }
+      catch (e) { box.innerHTML = `<p class="erro">${esc(e && e.message ? e.message : String(e))}</p><p class="muted small">Autorize o Bluetooth quando o Android pedir.</p>`; } }
+    else { box.innerHTML = `<p class="muted small">${sel.nome && sel.via === via ? 'Selecionada: <b>' + esc(sel.nome) + '</b>' : 'Nenhuma selecionada.'}</p><button type="button" class="btn ghost" id="ime">Escolher impressora</button>`;
+      $('#ime', w.m).onclick = async () => { try { const r = await GestImpressora.escolher(via); sel = Object.assign(sel, r); desenhar(); } catch (e) { if (!(e && /No device|cancel|abort|NotFound|select/i.test(String(e.name + e.message)))) toast(e.message || String(e), true); } }; }
+  };
+  $('#imv', w.m).onchange = desenhar; desenhar();
+  $('#imt', w.m).onclick = async e => { const c = guardarSel(); e.target.disabled = true; try { await imprimirDireto(reciboAmostra()); toast('Teste enviado.'); } catch (er) { toast('Falhou: ' + (er && er.message ? er.message : er), true); } finally { e.target.disabled = false; } };
+}
+
 function mostrarRecibo(v) {
-  const dono = S.perfil && S.perfil.papel === 'dono';
+  const dono = S.perfil && S.perfil.papel === 'dono', tem = !!(GestImpressora.ler() || {}).via;
   const w = modal('Venda ' + nvenda(v), `<div id="rcv" class="rcv">${reciboHTML(v)}</div><div class="rcopt"><label>Papel <select id="pap" class="in">${opts(Object.entries(PAPEIS).map(([k, p]) => [k, p.nome]), papelAtual())}</select></label></div>
-    <div class="mf rcact"><button type="button" class="btn" id="pr">Imprimir recibo</button><button type="button" class="btn ghost" id="pdf">Guardar em PDF</button><button type="button" class="btn ghost" id="sh">Partilhar</button>${dono ? '<button type="button" class="btn ghost" id="cf">Personalizar</button>' : ''}${!v.anulada && !v.pendente ? '<button type="button" class="btn ghost" id="an">Anular venda</button>' : ''}</div>`, {});
+    <div class="mf rcact">${tem ? '<button type="button" class="btn" id="pd">Imprimir (térmica)</button>' : ''}<button type="button" class="btn${tem ? ' ghost' : ''}" id="pr">Imprimir recibo</button><button type="button" class="btn ghost" id="pdf">Guardar em PDF</button><button type="button" class="btn ghost" id="im">Impressora</button><button type="button" class="btn ghost" id="sh">Partilhar</button>${dono ? '<button type="button" class="btn ghost" id="cf">Personalizar</button>' : ''}${!v.anulada && !v.pendente ? '<button type="button" class="btn ghost" id="an">Anular venda</button>' : ''}</div>`, {});
   $('#pr', w.m).onclick = () => imprimirRecibo(v);
+  const pd = $('#pd', w.m); if (pd) pd.onclick = () => imprimirDiretoUI(v, pd);
+  $('#im', w.m).onclick = () => impressoraConfigurar(() => { w.close && w.close(); mostrarRecibo(v); });
   $('#pdf', w.m).onclick = () => guardarPDF(v);
   $('#sh', w.m).onclick = () => partilharRecibo(v);
   $('#pap', w.m).onchange = e => { jSet('gestmz_papel', e.target.value); $('#rcv', w.m).innerHTML = reciboHTML(v); };
