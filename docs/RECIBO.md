@@ -8,5 +8,10 @@
   o que mostrar. Guardada na tabela `recibo_config` (migração 18, só acrescenta) e em cópia no aparelho (funciona sem rede e antes de a
   migração estar ativa).
 - Sem código QR (decisão do proprietário): o recibo mantém-se limpo e simples.
-- Impressão: navegador/PDF/partilha do Android. Não há comunicação direta ESC/POS por Bluetooth/USB.
+- Impressão: navegador, PDF, partilha do Android **e impressão térmica direta (ESC/POS)**:
+  - Android (app): Bluetooth, só impressoras já emparelhadas no Android (plugin `GestMZImpressora`, permissão BLUETOOTH_CONNECT).
+  - Computador (Chrome/Edge e app Windows): USB (WebUSB) e porta série / Bluetooth-COM (Web Serial).
+  - Conta → Impressora térmica (ou «Impressora» no recibo): escolher a impressora, acentos (PC850 por defeito, PC858, PC860 ou sem acentos), cortar o papel, imprimir teste.
+  - Largura: 32 colunas (58 mm) e 48 (80 mm). Logótipo em raster com difusão de erro. Nome e total em negrito de dupla altura.
+  - Testado por emulador de comandos ESC/POS e por simulação dos três envios; **não** testado em impressora física.
 - Reverter a base de dados: `supabase/reverter_migracao_18.sql` (só apaga a tabela e a função novas).

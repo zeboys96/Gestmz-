@@ -18,7 +18,8 @@ function carregar({ empacotado }) {
   const electron = { app: reg.app, BrowserWindow: Janela, Menu: { setApplicationMenu: v => { reg.menu = v; } },
     protocol: { registerSchemesAsPrivileged: s => { reg.schemes = s; }, handle: (n, f) => { reg.protocolo = f; } },
     net: { fetch: u => { reg.fetched.push(u); return Promise.resolve({ ok: true }); } },
-    session: { defaultSession: { setPermissionRequestHandler: f => { reg.permReq = f; }, setPermissionCheckHandler: f => { reg.permChk = f; } } },
+    session: { defaultSession: { setPermissionRequestHandler: f => { reg.permReq = f; }, setPermissionCheckHandler: f => { reg.permChk = f; }, setDevicePermissionHandler: f => { reg.devPerm = f; } } },
+    dialog: { showMessageBox: async () => ({ response: 0 }) },
     shell: { openExternal: u => reg.externos.push(u) }, ipcMain: { handle: (c, f) => { reg.ipc[c] = f; } } };
   Object.assign(reg.updater, { autoDownload: true, autoInstallOnAppQuit: true, allowPrerelease: true, allowDowngrade: true, checks: 0, downloads: 0, instalou: null,
     checkForUpdates: async () => { reg.updater.checks++; }, downloadUpdate: async () => { reg.updater.downloads++; }, quitAndInstall: (a, b) => { reg.updater.instalou = [a, b]; } });
@@ -58,6 +59,10 @@ test('Electron: só a própria app pode usar a câmara; navegação externa vai 
   const dec = (wc, p) => { let v; r.permReq(wc, p, x => { v = x; }); return v; };
   assert.equal(dec(ok, 'media'), true); assert.equal(dec(fora, 'media'), false); assert.equal(dec(ok, 'geolocation'), false); assert.equal(dec(ok, 'notifications'), false);
   assert.equal(r.permChk(ok, 'media'), true); assert.equal(r.permChk(fora, 'media'), false);
+  // impressoras: USB e porta série só para a própria app; nada de HID/Bluetooth/outros
+  assert.equal(dec(ok, 'usb'), true); assert.equal(dec(ok, 'serial'), true); assert.equal(dec(fora, 'usb'), false); assert.equal(dec(fora, 'serial'), false); assert.equal(dec(ok, 'hid'), false); assert.equal(dec(ok, 'bluetooth'), false);
+  assert.equal(r.devPerm({ deviceType: 'usb', origin: 'app://gestmz' }), true); assert.equal(r.devPerm({ deviceType: 'serial', origin: 'app://gestmz' }), true);
+  assert.equal(r.devPerm({ deviceType: 'usb', origin: 'https://evil.example' }), false); assert.equal(r.devPerm({ deviceType: 'hid', origin: 'app://gestmz' }), false);
   let prevenido = false; wc.emit('will-navigate', { preventDefault() { prevenido = true; } }, 'https://exemplo.com/x'); assert.ok(prevenido); assert.deepEqual(r.externos, ['https://exemplo.com/x']);
   assert.deepEqual(r.janelas[0].abrir({ url: 'file:///C:/x' }), { action: 'deny' }); assert.equal(r.externos.length, 1, 'só https abre fora da app');
 });
