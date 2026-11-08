@@ -220,8 +220,21 @@ function authShell(inner) {
   $('#app').innerHTML = `<div class="auth"><aside class="auth-art"><div class="art-in">${logo(46)}<h1>GestMZ</h1><p>Gestão empresarial de comércios em Moçambique.</p><ul><li>Vendas, stock e validades num só lugar</li><li>Cada loja vê apenas os seus dados</li><li>Funciona no telemóvel e no computador</li></ul></div></aside><main class="auth-main"><div class="auth-card">${inner}</div></main></div>`;
 }
 
-function vFalta() {
-  authShell(`<h2>Falta ligar o banco de dados</h2><p>Abra o ficheiro <b>config.js</b> e cole a chave pública do Supabase no campo <b>SUPABASE_KEY</b>. Depois volte a abrir esta página.</p><p class="muted small">O passo a passo está no ficheiro LEIA-ME.md.</p>`);
+function vFalta(causa) {
+  if (causa === 'config') {
+    authShell(`<h2>Falta ligar o banco de dados</h2><p>Abra o ficheiro <b>config.js</b> e cole a chave pública do Supabase no campo <b>SUPABASE_KEY</b>. Depois volte a abrir esta página.</p><p class="muted small">O passo a passo está no ficheiro LEIA-ME.md.</p>`);
+    return;
+  }
+  // Componente não carregou (não é falta de chave): mensagem correta para o utilizador final + nova tentativa.
+  authShell(`<h2>Não foi possível iniciar a aplicação</h2><p>Um componente necessário não carregou neste telemóvel. Isto costuma resolver-se assim:</p><ol class="small" style="margin:8px 0 12px 18px"><li>Verifique a ligação à Internet e toque em <b>Tentar de novo</b>.</li><li>Atualize o <b>Android System WebView</b> e o <b>Google Chrome</b> na Play Store.</li><li>Se continuar, instale de novo a versão oficial do GestMZ.</li></ol><button class="btn block" id="tn">Tentar de novo</button><p class="muted small">Código: ${esc(String(causa || 'componente'))}</p>`);
+  const t = document.getElementById('tn');
+  if (t) t.onclick = () => {
+    if (window.supabase) return boot();
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+    sc.onload = () => boot(); sc.onerror = () => { t.textContent = 'Sem ligação. Tentar de novo'; };
+    document.head.appendChild(sc);
+  };
 }
 function vErro(msg) {
   authShell(`<h2>Algo correu mal</h2><div class="msg bad">${esc(msg)}</div><button class="btn block" id="t">Tentar de novo</button><button class="link" id="s">Sair</button>`);
@@ -329,7 +342,8 @@ async function sair() {
 
 /* ---------- arranque ---------- */
 async function boot() {
-  if (!CFG.SUPABASE_KEY || /^COLE/.test(CFG.SUPABASE_KEY) || !window.supabase) return vFalta();
+  if (!CFG.SUPABASE_KEY || /^COLE/.test(CFG.SUPABASE_KEY)) return vFalta('config');
+  if (!window.supabase) return vFalta('supabase-js');
   sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
   sb.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT' && S.perfil) { S.perfil = null; pararRT(); vLogin('A sessão terminou. Entre de novo.'); } });
   if (!navigator.onLine && jGet('gestmz_cache', null)) return entrarOffline();
